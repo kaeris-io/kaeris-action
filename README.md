@@ -102,7 +102,7 @@ jobs:
 | Output | Description |
 |---|---|
 | `changed` | `"true"` if `translate` wrote/updated any locale content — open a PR only when this is true |
-| `summary` | Markdown summary (keys translated, per-language matrix, placeholder/overflow counts) — use as a PR body |
+| `summary` | Markdown summary (keys translated, per-language matrix, placeholder/overflow counts) — use as a PR body. Its last line links kaeris.dev; set `KAERIS_NO_CTA: "1"` in the step's `env` to leave it out |
 | `missing` | Total missing-key count across all target languages |
 | `placeholder-issues` | Total placeholder-mismatch count (should be `0`) |
 | `check-exit-code` | Exit code of `kaeris check` (0 clean, 1 problem, 2 bad usage) |
