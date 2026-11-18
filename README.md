@@ -96,7 +96,7 @@ jobs:
 ### Brand names, glossary and models
 
 The action runs the CLI from the root of your repository, so files there apply to every run
-without an input: `kaeris.json` to `translate`, `kaeris-glossary.json` to both modes.
+without an input. Both modes read `keep` and the glossary; `models` matters only to `translate`.
 
 `kaeris.json`:
 
@@ -122,8 +122,8 @@ without an input: `kaeris.json` to `translate`, `kaeris-glossary.json` to both m
   can still be right).
 - **`models`** (Lifetime, with `openrouter-key`): one OpenRouter model per language, e.g.
   `"models": {"de": "anthropic/claude-sonnet-4.5", "ja": "google/gemini-2.5-pro"}`. A language
-  that is not listed uses the default model. Other plans refuse it with HTTP 403 before anything
-  is started or charged.
+  that is not listed uses `model` from the same file, and the default model when that is not set
+  either. Other plans refuse it with HTTP 403 before anything is started or charged.
 
 The same settings work locally with `pip install kaeris`; the CLI docs have a runnable example:
 [kaeris.dev/docs/cli](https://kaeris.dev/docs/cli#cli-terms).
