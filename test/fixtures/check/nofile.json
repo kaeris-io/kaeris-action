@@ -1,0 +1,18 @@
+{
+  "ok": false,
+  "missing": {
+    "ja": [
+      "checkout.pay",
+      "checkout.title",
+      "files_deleted",
+      "greeting"
+    ]
+  },
+  "extra": {},
+  "placeholder_issues": [],
+  "missing_files": [
+    "ja"
+  ],
+  "faults": [],
+  "warnings": []
+}

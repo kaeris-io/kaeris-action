@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "missing": {},
+  "extra": {
+    "de": [
+      "old_banner"
+    ]
+  },
+  "placeholder_issues": [],
+  "missing_files": [],
+  "faults": [],
+  "warnings": []
+}

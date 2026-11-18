@@ -1,16 +1,17 @@
 """P2.2: in check mode the action keeps ONE comment on the pull request with what is broken, and
 edits it on the next push.
 
-These tests run the action's own `run:` block from action.yml under bash, the way a runner does
-(`bash --noprofile --norc -eo pipefail`), with its inputs and env wired from action.yml itself.
-Two things are replaced, nothing else:
+These tests run the action's own composite steps from action.yml under bash, the way a runner
+does (`bash --noprofile --norc -eo pipefail`, one GITHUB_OUTPUT per step, `if:` conditions,
+`steps.<id>.outputs`, a failed step skipping the ones after it). Inputs and env come from
+action.yml itself. Two things are replaced, nothing else:
 
   * `kaeris` is a stub that prints a recorded `kaeris check --json` result (test/fixtures/check,
-    recorded from CLI 0.2.39 on test/fixtures/{broken,good}) and copies the recorded SARIF;
+    recorded from CLI 0.2.39 on test/fixtures/*) and copies the recorded SARIF;
   * the GitHub REST API is a local http.server on 127.0.0.1 that keeps the PR's comments.
 
-So a passing run here means the real step posts / edits the comment and turns red or green by
-the findings, not just that some helper function returns the right string. Offline, stdlib.
+Python runs with PYTHONUTF8=0: a Windows runner has no UTF-8 mode, and a test that sets it hides
+every encoding bug. Offline, stdlib only.
 """
 import json
 import os
@@ -32,6 +33,10 @@ REPO = "octo/shop"
 PR = 7
 TOKEN = "ghs_test_token_not_real"
 HEAD_SHA = "0123456789abcdef0123456789abcdef01234567"
+BOT = ("github-actions[bot]", "Bot")
+FIXTURES = {   # name: (source folder, languages, exit code the CLI gave when it was recorded)
+    "broken": ("broken", "de", 1), "good": ("good", "de,fr", 0), "nofile": ("good", "de,ja", 1),
+    "stale": ("stale", "de", 0), "umlaut": ("ümlaut", "de", 1)}
 
 
 def _posix(path):
@@ -53,55 +58,124 @@ def find_bash():
 
 # ── action.yml, read the way the runner reads it (only the shapes this file uses) ────────────
 
+def _unquote(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    return v
+
+
 def parse_action():
     with open(ACTION, encoding="utf-8") as f:
         lines = f.read().splitlines()
     inputs, section, cur = {}, None, None
+    steps, step, key = [], None, None
     for ln in lines:
         if ln and not ln.startswith(" "):
             section = ln.split(":")[0]
             continue
-        if section != "inputs":
-            continue
-        m = re.match(r"^  ([\w-]+):\s*$", ln)
-        if m:
-            cur = m.group(1)
-            inputs[cur] = ""
-            continue
-        m = re.match(r"^    default:\s*(.*)$", ln)
-        if m and cur:
-            v = m.group(1).strip()
-            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-                v = v[1:-1]
-            inputs[cur] = v
-    i = next(n for n, ln in enumerate(lines) if ln.strip() == "id: run")
-    env, script, n = {}, [], i + 1
-    while not lines[n].strip().startswith("run:"):
-        m = re.match(r"^        ([A-Z_][A-Z0-9_]*):\s*(.*)$", lines[n])
-        if m:
-            env[m.group(1)] = m.group(2).strip()
-        n += 1
-    for ln in lines[n + 1:]:
-        if ln.strip() and not ln.startswith("        "):
-            break
-        script.append(ln[8:])
-    return inputs, env, "\n".join(script) + "\n"
+        if section == "inputs":
+            m = re.match(r"^  ([\w-]+):\s*$", ln)
+            if m:
+                cur = m.group(1)
+                inputs[cur] = ""
+                continue
+            m = re.match(r"^    default:\s*(.*)$", ln)
+            if m and cur:
+                inputs[cur] = _unquote(m.group(1))
+        elif section == "runs":
+            m = re.match(r"^    - (\w[\w-]*):\s*(.*)$", ln)
+            if m:
+                step = {"env": {}, "run": None}
+                steps.append(step)
+                step[m.group(1)] = _unquote(m.group(2))
+                key = None
+                continue
+            if step is None:
+                continue
+            m = re.match(r"^      (\w[\w-]*):\s*(.*)$", ln)
+            if m:
+                key = m.group(1)
+                if key == "run":
+                    step["run"] = [] if m.group(2).strip() == "|" else [m.group(2)]
+                elif key not in ("env", "with"):
+                    step[key] = _unquote(m.group(2))
+                continue
+            if key == "env":
+                m = re.match(r"^        ([A-Z_][A-Z0-9_]*):\s*(.*)$", ln)
+                if m:
+                    step["env"][m.group(1)] = m.group(2).strip()
+            elif key == "run" and (not ln.strip() or ln.startswith("        ")):
+                step["run"].append(ln[8:])
+    for s in steps:
+        if s["run"] is not None:
+            s["run"] = "\n".join(s["run"]) + "\n"
+    return inputs, steps
 
 
-def resolve(expr, inputs, ctx):
+def resolve(expr, inputs, ctx, outputs):
     def sub(m):
         name = m.group(1)
         if name.startswith("inputs."):
-            return resolve(inputs.get(name[7:], ""), inputs, ctx)
+            return resolve(inputs.get(name[7:], ""), inputs, ctx, outputs)
+        if name.startswith("steps."):
+            _, sid, _, out = name.split(".", 3)
+            return outputs.get(sid, {}).get(out, "")
         return ctx[name]
     return re.sub(r"\$\{\{\s*([\w.-]+)\s*\}\}", sub, expr)
+
+
+def condition(expr, inputs, outputs, failed):
+    """The few expression shapes action.yml uses in `if:`."""
+    if not expr:
+        return not failed
+    e = expr.strip()
+    if e.startswith("${{") and e.endswith("}}"):
+        e = e[3:-2].strip()
+    uses_status = re.search(r"\b(always|failure|cancelled|success)\(\)", e)
+    e = re.sub(r"inputs\.([\w-]+)", lambda m: repr(inputs.get(m.group(1), "")), e)
+    e = re.sub(r"steps\.([\w-]+)\.outputs\.([\w-]+)",
+               lambda m: repr(outputs.get(m.group(1), {}).get(m.group(2), "")), e)
+    e = (e.replace("!cancelled()", "True").replace("always()", "True")
+          .replace("failure()", repr(failed)).replace("success()", repr(not failed))
+          .replace("&&", " and ").replace("||", " or ").replace("!=", "\0")
+          .replace("!", " not ").replace("\0", " != "))
+    ok = bool(eval(e, {"__builtins__": {}}, {"True": True, "False": False}))
+    return ok if uses_status else (ok and not failed)
+
+
+def read_outputs(path):
+    out = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        m = re.match(r"^([\w-]+)<<(.+)$", ln)
+        if m:
+            name, delim, buf = m.group(1), m.group(2), []
+            i += 1
+            while i < len(lines) and lines[i] != delim:
+                buf.append(lines[i])
+                i += 1
+            out[name] = "\n".join(buf)
+        elif "=" in ln:
+            k, v = ln.split("=", 1)
+            out[k] = v
+        i += 1
+    return out
 
 
 # ── a GitHub that keeps one PR's comments ────────────────────────────────────────────────────
 
 class FakeGitHub:
-    def __init__(self, deny=False):
-        self.deny = deny                   # True: every call is 403, as for a read-only token
+    def __init__(self):
+        self.deny = None          # "all": every call 403 (no permission); "write": GET ok, writes 403
+        self.patch_404 = False    # the comment was deleted between our GET and our PATCH
+        self.race = False         # another job of the same matrix posts the same comment first
+        self.poster = BOT         # who the token is
         self.comments = []
         self.requests = []
         self.next_id = 1000
@@ -111,8 +185,8 @@ class FakeGitHub:
             def log_message(self, *a):
                 pass
 
-            def _send(self, code, obj):
-                raw = json.dumps(obj).encode()
+            def _send(self, code, obj=None):
+                raw = json.dumps(obj).encode() if obj is not None else b""
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(raw)))
@@ -125,7 +199,7 @@ class FakeGitHub:
                 url = urlsplit(self.path)
                 gh.requests.append({"method": method, "path": url.path, "query": parse_qs(url.query),
                                     "body": body, "auth": self.headers.get("Authorization")})
-                if gh.deny:
+                if gh.deny == "all" or (gh.deny == "write" and method != "GET"):
                     return self._send(403, {"message": "Resource not accessible by integration"})
                 list_path = f"/repos/{REPO}/issues/{PR}/comments"
                 m = re.match(rf"^/repos/{REPO}/issues/comments/(\d+)$", url.path)
@@ -135,11 +209,16 @@ class FakeGitHub:
                     page = int(q.get("page", ["1"])[0])
                     return self._send(200, gh.comments[(page - 1) * per: page * per])
                 if method == "POST" and url.path == list_path:
-                    c = gh.add(body["body"])
-                    return self._send(201, c)
-                if method == "PATCH" and m:
+                    if gh.race:
+                        gh.race = False
+                        gh.add(body["body"], *gh.poster)
+                    return self._send(201, gh.add(body["body"], *gh.poster))
+                if method in ("PATCH", "DELETE") and m:
                     for c in gh.comments:
-                        if c["id"] == int(m.group(1)):
+                        if c["id"] == int(m.group(1)) and not (method == "PATCH" and gh.patch_404):
+                            if method == "DELETE":
+                                gh.comments.remove(c)
+                                return self._send(204)
                             c["body"] = body["body"]
                             return self._send(200, c)
                     return self._send(404, {"message": "Not Found"})
@@ -154,13 +233,17 @@ class FakeGitHub:
             def do_PATCH(self):
                 self._handle("PATCH")
 
+            def do_DELETE(self):
+                self._handle("DELETE")
+
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def add(self, body, login="github-actions[bot]"):
+    def add(self, body, login="github-actions[bot]", kind="Bot"):
         self.next_id += 1
-        c = {"id": self.next_id, "body": body, "user": {"login": login, "type": "Bot"}}
+        c = {"id": self.next_id, "body": body, "user": {"login": login, "type": kind},
+             "html_url": f"https://github.com/{REPO}/pull/{PR}#issuecomment-{self.next_id}"}
         self.comments.append(c)
         return c
 
@@ -172,11 +255,12 @@ class FakeGitHub:
         return [r for r in self.requests if r["method"] == method]
 
 
-# ── one run of the step ──────────────────────────────────────────────────────────────────────
+# ── one run of the action ────────────────────────────────────────────────────────────────────
 
 KAERIS_STUB = """#!/bin/sh
 # Stub of the KAERIS CLI: the recorded `kaeris check --json` result, the recorded SARIF.
 echo "$@" >> "$FAKE_ARGS"
+env >> "$FAKE_ENV"
 prev=""
 for a in "$@"; do
   if [ "$prev" = "--sarif" ] && [ -n "$FAKE_SARIF" ]; then cp "$FAKE_SARIF" "$a"; fi
@@ -188,15 +272,17 @@ exit "${FAKE_EXIT:-0}"
 
 
 class Run:
-    def __init__(self, code, out, summary, args):
+    def __init__(self, code, out, summary, args, cli_env, outputs):
         self.code, self.out, self.summary, self.args = code, out, summary, args
+        self.cli_env, self.outputs = cli_env, outputs
 
 
-def run_step(gh, fixture="broken", event="pull_request", inputs=None, fork=False, token=TOKEN):
+def run_action(gh, fixture="broken", event="pull_request", inputs=None, fork=False, token=TOKEN,
+               exit_code=None, api_url=None):
     bash = find_bash()
-    defaults, env_map, script = parse_action()
-    given = {"mode": "check", "source": f"test/fixtures/{fixture}/en.json",
-             "languages": "de" if fixture == "broken" else "de,fr"}
+    defaults, steps = parse_action()
+    folder, langs, recorded_exit = FIXTURES[fixture]
+    given = {"mode": "check", "source": f"test/fixtures/{folder}/en.json", "languages": langs}
     given.update(inputs or {})
     values = {**defaults, **given}
     with tempfile.TemporaryDirectory() as t:
@@ -217,38 +303,56 @@ def run_step(gh, fixture="broken", event="pull_request", inputs=None, fork=False
         with open(event_path, "w", encoding="utf-8") as f:
             json.dump(payload, f)
         ctx = {"github.token": token, "github.action_path": _posix(ROOT)}
-        env = {k: v for k, v in os.environ.items()
-               if not k.startswith(("GITHUB_", "RUNNER_", "INPUT_", "KA_", "KAERIS_"))}
-        env.update({
-            "PATH": stubs + os.pathsep + env.get("PATH", ""),
-            "PYTHONUTF8": "1", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost",
+        base = {k: v for k, v in os.environ.items()
+                if not k.startswith(("GITHUB_", "RUNNER_", "INPUT_", "KA_", "KAERIS_", "PYTHON"))}
+        base.update({
+            "PATH": stubs + os.pathsep + base.get("PATH", ""),
+            "PYTHONUTF8": "0", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost",
             "GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": event, "GITHUB_EVENT_PATH": _posix(event_path),
-            "GITHUB_REPOSITORY": REPO, "GITHUB_API_URL": gh.url, "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_REPOSITORY": REPO, "GITHUB_API_URL": api_url or gh.url,
+            "GITHUB_SERVER_URL": "https://github.com",
             "GITHUB_RUN_ID": "4242", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "f" * 40,
-            "GITHUB_OUTPUT": f"{tmp}/gh_output", "GITHUB_STEP_SUMMARY": f"{tmp}/step_summary.md",
             "RUNNER_TEMP": tmp,
             "FAKE_CHECK_JSON": _posix(os.path.join(FIX, f"{fixture}.json")),
             "FAKE_SARIF": _posix(os.path.join(FIX, f"{fixture}.sarif")),
-            "FAKE_EXIT": "1" if fixture == "broken" else "0",
-            "FAKE_ARGS": f"{tmp}/kaeris_args",
+            "FAKE_EXIT": str(recorded_exit if exit_code is None else exit_code),
+            "FAKE_ARGS": f"{tmp}/kaeris_args", "FAKE_ENV": f"{tmp}/kaeris_env",
         })
-        for k, v in env_map.items():
-            env[k] = resolve(v, values, ctx)
-        script_path = os.path.join(t, "step.sh")
-        with open(script_path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(resolve(script, values, ctx))
-        p = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", _posix(script_path)],
-                           cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=120)
+        outputs, failed, code, log = {}, False, 0, []
+        for n, step in enumerate(steps):
+            if step["run"] is None or step.get("name") == "Install KAERIS CLI":
+                continue
+            if not condition(step.get("if", ""), values, outputs, failed):
+                continue
+            env = dict(base)
+            env["GITHUB_OUTPUT"] = f"{tmp}/out_{n}"
+            env["GITHUB_STEP_SUMMARY"] = f"{tmp}/summary_{n}.md"
+            for k, v in step["env"].items():
+                env[k] = resolve(v, values, ctx, outputs)
+            script_path = os.path.join(t, f"step_{n}.sh")
+            with open(script_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(resolve(step["run"], values, ctx, outputs))
+            p = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", _posix(script_path)],
+                               cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+            log.append(p.stdout + p.stderr)
+            if step.get("id"):
+                outputs[step["id"]] = read_outputs(os.path.join(t, f"out_{n}"))
+            if p.returncode != 0 and not failed:
+                failed, code = True, p.returncode
         summary = ""
-        if os.path.isfile(os.path.join(t, "step_summary.md")):
-            with open(os.path.join(t, "step_summary.md"), encoding="utf-8") as f:
-                summary = f.read()
-        args = ""
-        if os.path.isfile(os.path.join(t, "kaeris_args")):
-            with open(os.path.join(t, "kaeris_args"), encoding="utf-8") as f:
-                args = f.read()
-    return Run(p.returncode, p.stdout + p.stderr, summary, args)
+        for name in sorted(os.listdir(t)):
+            if name.startswith("summary_"):
+                with open(os.path.join(t, name), encoding="utf-8") as f:
+                    summary += f.read()
+
+        def read(name):
+            path = os.path.join(t, name)
+            if not os.path.isfile(path):
+                return ""
+            with open(path, encoding="utf-8", errors="replace") as f:
+                return f.read()
+        return Run(code, "".join(log), summary, read("kaeris_args"), read("kaeris_env"), outputs)
 
 
 @unittest.skipUnless(find_bash(), "needs bash (Git Bash on Windows)")
@@ -262,7 +366,7 @@ class PRComment(unittest.TestCase):
 
     # (a) a broken {name}: one comment with the marker, the job is red
     def test_a_broken_placeholder_posts_one_comment_and_fails(self):
-        r = run_step(self.gh, "broken")
+        r = run_action(self.gh, "broken")
         self.assertNotEqual(r.code, 0, r.out)
         posts = self.gh.calls("POST")
         self.assertEqual(len(posts), 1, r.out)
@@ -272,18 +376,20 @@ class PRComment(unittest.TestCase):
         self.assertTrue(body.startswith("<!-- kaeris-action"), body)
         for want in ("greeting", "{name}", "checkout.title", "| de |", "test/fixtures/broken/de.json"):
             self.assertIn(want, body)
-        # the line of the broken key, at the PR's head commit
         self.assertIn(f"https://github.com/{REPO}/blob/{HEAD_SHA}/test/fixtures/broken/de.json#L2", body)
         self.assertIn(f"https://github.com/{REPO}/actions/runs/4242", body)
         self.assertIn("https://kaeris.dev/?utm_source=action-comment", body)
+        self.assertIn("Checked de against `test/fixtures/broken/en.json` at `0123456`.", body)
+        self.assertIn("Checked by [KAERIS]", body)
         self.assertNotIn(TOKEN, r.out)
         self.assertLess(len(body), 65536)
+        self.assertEqual(r.outputs["comment"]["comment-url"], self.gh.comments[0]["html_url"])
 
     # (b) the next push edits that comment, it does not add a second one
     def test_b_second_run_patches_the_same_comment(self):
-        run_step(self.gh, "broken")
+        run_action(self.gh, "broken")
         first = self.marked()[0]["id"]
-        r = run_step(self.gh, "broken")
+        r = run_action(self.gh, "broken")
         self.assertNotEqual(r.code, 0, r.out)
         self.assertEqual(len(self.gh.calls("POST")), 1, r.out)
         patches = self.gh.calls("PATCH")
@@ -293,91 +399,229 @@ class PRComment(unittest.TestCase):
 
     # (c) clean after broken: the comment says so and the job is green
     def test_c_clean_run_updates_existing_comment_to_clean(self):
-        run_step(self.gh, "broken")
-        # the next push of the same PR: same source file, now clean
-        r = run_step(self.gh, "good", inputs={"source": "test/fixtures/broken/en.json"})
+        run_action(self.gh, "broken")
+        # the next push of the same PR: same source and languages, now clean
+        r = run_action(self.gh, "good", inputs={"source": "test/fixtures/broken/en.json", "languages": "de"})
         self.assertEqual(r.code, 0, r.out)
         self.assertEqual(len(self.gh.calls("POST")), 1)
         self.assertEqual(len(self.gh.calls("PATCH")), 1, r.out)
         body = self.marked()[0]["body"]
         self.assertIn("no problems", body.lower())
+        self.assertIn("Nothing left to fix.", body)
         self.assertNotIn("greeting", body)
 
-    # (c) clean with no comment yet: nothing is created
     def test_c_clean_run_without_comment_creates_nothing(self):
-        r = run_step(self.gh, "good")
+        r = run_action(self.gh, "good")
         self.assertEqual(r.code, 0, r.out)
         self.assertEqual(self.gh.calls("POST") + self.gh.calls("PATCH"), [])
         self.assertEqual(self.gh.comments, [])
 
     # (d) fork PR / no pull-requests: write: a warning, and the findings alone decide the job
-    def test_d_forbidden_broken_still_fails_on_findings_with_a_warning(self):
-        self.gh.deny = True
-        r = run_step(self.gh, "broken", fork=True)
+    def test_d_fork_broken_still_fails_on_findings_with_a_warning(self):
+        self.gh.deny = "all"
+        r = run_action(self.gh, "broken", fork=True)
         self.assertEqual(r.code, 1, r.out)
         self.assertIn("::warning", r.out)
-        self.assertIn("pull-requests: write", r.out)
+        self.assertIn("fork", r.out)
+        self.assertIn("job summary", r.out)
         self.assertNotIn(TOKEN, r.out)
 
     def test_d_forbidden_clean_stays_green_and_quiet(self):
-        self.gh.deny = True
-        r = run_step(self.gh, "good")
+        self.gh.deny = "all"
+        r = run_action(self.gh, "good")
         self.assertEqual(r.code, 0, r.out)
-        self.assertNotIn("::warning", r.out)       # nothing to report: no noise on every clean PR
+        self.assertNotIn("::warning", r.out)
 
     def test_d_forbidden_broken_same_repo(self):
-        self.gh.deny = True
-        r = run_step(self.gh, "broken")
+        self.gh.deny = "all"
+        r = run_action(self.gh, "broken")
         self.assertEqual(r.code, 1, r.out)
         self.assertIn("::warning", r.out)
+        self.assertIn("pull-requests: write", r.out)
+
+    def test_d_read_ok_write_forbidden(self):
+        self.gh.deny = "write"
+        r = run_action(self.gh, "broken")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertIn("::warning", r.out)
+        self.assertIn("pull-requests: write", r.out)
+        self.assertEqual(self.gh.comments, [])
 
     def test_d_no_token_warns_and_calls_nothing(self):
-        r = run_step(self.gh, "broken", token="")
+        r = run_action(self.gh, "broken", token="")
         self.assertEqual(r.code, 1, r.out)
         self.assertIn("::warning", r.out)
         self.assertEqual(self.gh.requests, [])
+
+    def test_d_api_unreachable_warns_verdict_unchanged(self):
+        r = run_action(self.gh, "broken", api_url="http://127.0.0.1:9")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertIn("::warning", r.out)
+        r = run_action(self.gh, "good", api_url="http://127.0.0.1:9")
+        self.assertEqual(r.code, 0, r.out)
 
     # (e) not a pull request: the comment is not touched at all
     def test_e_push_event_touches_no_comment(self):
-        self.gh.add("<!-- kaeris-action check: test/fixtures/broken/en.json -->\nold")
-        r = run_step(self.gh, "broken", event="push")
+        run_action(self.gh, "broken")
+        before = [dict(c) for c in self.gh.comments]
+        n = len(self.gh.requests)
+        r = run_action(self.gh, "good", event="push",
+                       inputs={"source": "test/fixtures/broken/en.json", "languages": "de"})
+        self.assertEqual(r.code, 0, r.out)
+        self.assertEqual(len(self.gh.requests), n)
+        self.assertEqual(self.gh.comments, before)
+
+    def test_e_pull_request_target_is_not_a_comment_event(self):
+        # pull_request_target checks out the BASE by default: findings would be about main.
+        r = run_action(self.gh, "broken", event="pull_request_target")
         self.assertEqual(r.code, 1, r.out)
         self.assertEqual(self.gh.requests, [])
-        self.assertTrue(self.gh.comments[0]["body"].endswith("old"))
 
     def test_e_comment_false_touches_nothing(self):
-        r = run_step(self.gh, "broken", inputs={"comment": "false"})
+        r = run_action(self.gh, "broken", inputs={"comment": "false"})
         self.assertEqual(r.code, 1, r.out)
         self.assertEqual(self.gh.requests, [])
 
-    # around it
+    # B1: only our own comment is ours
+    def test_b1_a_strangers_comment_with_our_marker_is_not_edited(self):
+        run_action(self.gh, "broken")
+        stolen = self.gh.comments[0]
+        stolen["user"] = {"login": "stranger", "type": "User"}
+        stolen["body"] = stolen["body"].split("\n", 1)[0] + "\nmine now"
+        run_action(self.gh, "broken")
+        self.assertEqual(len(self.gh.calls("POST")), 2)
+        self.assertEqual(self.gh.calls("PATCH"), [])
+        self.assertTrue(stolen["body"].endswith("mine now"))
+
+    def test_b1_a_human_quoting_the_marker_is_not_hijacked(self):
+        run_action(self.gh, "broken")
+        first = self.gh.comments[0]
+        quoted = self.gh.add("> " + first["body"].split("\n", 1)[0] + "\n> why?", "someone", "User")
+        run_action(self.gh, "broken")
+        self.assertTrue(quoted["body"].endswith("why?"))
+        self.assertEqual(len(self.gh.calls("POST")), 1)
+
+    def test_b1_own_token_with_comment_author(self):
+        self.gh.poster = ("kaeris-ci", "User")
+        run_action(self.gh, "broken", inputs={"comment-author": "kaeris-ci"})
+        run_action(self.gh, "broken", inputs={"comment-author": "kaeris-ci"})
+        self.assertEqual(len(self.gh.calls("POST")), 1)
+        self.assertEqual(len(self.gh.calls("PATCH")), 1)
+
+    # B2: one comment per check, not per source file
+    def test_b2_language_matrix_keeps_separate_comments(self):
+        run_action(self.gh, "broken", inputs={"languages": "de"})
+        red = self.gh.comments[0]["body"]
+        r = run_action(self.gh, "good", inputs={"source": "test/fixtures/broken/en.json", "languages": "fr"})
+        self.assertEqual(r.code, 0, r.out)
+        self.assertEqual(self.gh.calls("PATCH"), [])
+        self.assertEqual(self.gh.comments[0]["body"], red)   # the red job's comment does not lie
+
+    def test_b2_comment_key_separates_two_steps(self):
+        run_action(self.gh, "broken", inputs={"comment-key": "web"})
+        run_action(self.gh, "broken", inputs={"comment-key": "app"})
+        self.assertEqual(len(self.gh.calls("POST")), 2)
+        self.assertEqual(len(self.marked()), 2)
+
+    def test_b2_os_matrix_race_keeps_the_oldest(self):
+        self.gh.race = True
+        r = run_action(self.gh, "broken")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertEqual(len(self.marked()), 1, r.out)
+        deletes = self.gh.calls("DELETE")
+        self.assertEqual(len(deletes), 1, r.out)
+        self.assertEqual(self.marked()[0]["id"], 1001)        # the rival's, posted first
+        self.assertTrue(deletes[0]["path"].endswith("/1002"))
+
+    def test_patch_404_falls_back_to_post(self):
+        run_action(self.gh, "broken")
+        self.gh.patch_404 = True
+        r = run_action(self.gh, "broken")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertEqual(len(self.gh.calls("POST")), 2, r.out)
+        self.assertNotIn("::warning", r.out)
+
+    # N1: the token reaches only the comment step
+    def test_n1_token_not_in_the_cli_environment(self):
+        r = run_action(self.gh, "broken")
+        self.assertTrue(r.cli_env, "the stub did not run")
+        self.assertNotIn(TOKEN, r.cli_env)
+        self.assertEqual(len(self.gh.calls("POST")), 1)
+
+    # N3: a language without a file is one row, first, not every key of the source
+    def test_n3_missing_file_is_one_row_first(self):
+        r = run_action(self.gh, "nofile")
+        self.assertEqual(r.code, 1, r.out)
+        body = self.gh.calls("POST")[0]["body"]["body"]
+        rows = [ln for ln in body.splitlines() if ln.startswith("| ") and not ln.startswith("| File")]
+        self.assertEqual(len(rows), 1, body)
+        self.assertIn("no locale file", rows[0])
+        self.assertIn("test/fixtures/good/ja.json", rows[0])
+        self.assertNotIn("checkout.pay", body)
+        self.assertNotIn("](", rows[0])                        # nothing to link to
+
+    # N4: what blocks is what made the check fail
+    def test_n4_exit_zero_means_nothing_blocks(self):
+        r = run_action(self.gh, "broken", exit_code=0)
+        self.assertEqual(r.code, 0, r.out)
+        self.assertEqual(self.gh.calls("POST"), [])
+
+    def test_n4_strict_capital_true_is_not_strict_like_bash(self):
+        r = run_action(self.gh, "stale", inputs={"strict": "True"})
+        self.assertNotIn("--strict", r.args)
+        self.assertEqual(r.code, 0, r.out)
+        self.assertEqual(self.gh.calls("POST"), [])
+
+    def test_n4_strict_makes_a_stale_key_blocking(self):
+        r = run_action(self.gh, "stale", inputs={"strict": "true"}, exit_code=1)
+        self.assertIn("--strict", r.args)
+        self.assertEqual(r.code, 1, r.out)
+        body = self.gh.calls("POST")[0]["body"]["body"]
+        row = next(ln for ln in body.splitlines() if "old_banner" in ln)
+        self.assertNotIn("warning:", row)
+        self.assertIn('--strict', body)
+        self.assertIn('--source "test/fixtures/stale/en.json"', body)
+
+    # N5: around it
+    def test_user_sarif_file_is_kept(self):
+        with tempfile.TemporaryDirectory() as d:
+            mine = os.path.join(d, "kaeris.sarif")
+            r = run_action(self.gh, "broken", inputs={"sarif-file": _posix(mine)})
+            self.assertTrue(os.path.isfile(mine), r.out)
+            with open(mine, encoding="utf-8") as a, open(os.path.join(FIX, "broken.sarif"), encoding="utf-8") as b:
+                self.assertEqual(a.read(), b.read())
+        self.assertIn(f"--sarif {_posix(mine)}", r.args)
+
+    def test_non_ascii_keys_and_paths_without_utf8_mode(self):
+        r = run_action(self.gh, "umlaut")
+        self.assertEqual(r.code, 1, r.out)
+        body = self.gh.calls("POST")[0]["body"]["body"]
+        self.assertIn("`grüße`", body)
+        self.assertIn("/test/fixtures/%C3%BCmlaut/de.json#L2", body)
+        self.assertIn("grüße", r.summary)
+
     def test_our_comment_found_past_the_first_page(self):
         for i in range(150):
-            self.gh.add(f"review comment {i}", login="someone")
-        run_step(self.gh, "broken")
+            self.gh.add(f"review comment {i}", "someone", "User")
+        run_action(self.gh, "broken")
         self.assertEqual(len(self.gh.calls("POST")), 1)
-        run_step(self.gh, "broken")
+        run_action(self.gh, "broken")
         self.assertEqual(len(self.gh.calls("POST")), 1, "second run must PATCH the comment on page 2")
         self.assertEqual(len(self.gh.calls("PATCH")), 1)
 
-    def test_a_human_quoting_the_marker_is_not_hijacked(self):
-        quoted = self.gh.add("> <!-- kaeris-action check: test/fixtures/broken/en.json -->\n> why?",
-                             login="someone")
-        run_step(self.gh, "broken")
-        self.assertEqual(len(self.gh.calls("POST")), 1)
-        self.assertTrue(quoted["body"].endswith("why?"))
-
-    def test_pull_request_target_comments_too(self):
-        run_step(self.gh, "broken", event="pull_request_target")
-        self.assertEqual(len(self.gh.calls("POST")), 1)
-
     def test_job_summary_lists_every_finding(self):
-        r = run_step(self.gh, "broken", event="push")
+        r = run_action(self.gh, "broken", event="push")
         self.assertIn("checkout.title", r.summary)
         self.assertIn("greeting", r.summary)
 
+    def test_cta_false_drops_the_link(self):
+        run_action(self.gh, "broken", inputs={"cta": "false"})
+        body = self.gh.calls("POST")[0]["body"]["body"]
+        self.assertNotIn("kaeris.dev", body)
+        self.assertIn("`comment: false` turns it off", body)
+
     def test_check_is_still_called_with_the_v2_flags(self):
-        r = run_step(self.gh, "broken")
+        r = run_action(self.gh, "broken")
         self.assertIn("check --source test/fixtures/broken/en.json --langs de", r.args)
         self.assertIn("--ci", r.args)
         self.assertIn("--json", r.args)
@@ -392,9 +636,9 @@ class Format(unittest.TestCase):
         import pr_comment
         cls.m = pr_comment
 
-    def body(self, check, **kw):
-        rows = self.m.collect(check, sarif=None, strict=kw.pop("strict", False))
-        return self.m.build_comment(rows, source="locales/en.json", langs=["de"], **kw)
+    def body(self, check, strict=False):
+        rows = self.m.collect(check, sarif=None, strict=strict)
+        return self.m.build_comment(rows, source="locales/en.json", langs=["de"], failing=True)
 
     def test_markdown_in_values_is_escaped(self):
         check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [], "placeholder_issues": [],
@@ -403,11 +647,17 @@ class Format(unittest.TestCase):
                              "msg": "lost inline tag <b> | see @admin and #12 **now**"}]}
         body = self.body(check)
         row = next(ln for ln in body.splitlines() if "lost inline tag" in ln)
-        self.assertEqual(row.count(" | "), 3, row)          # 4 columns, the | in the values escaped
-        self.assertNotIn("<b>", row)                         # shown, not rendered as bold
-        self.assertNotIn("@admin", row)                      # no mention ping
+        self.assertEqual(row.count(" | "), 3, row)
+        self.assertNotIn("<b>", row)
+        self.assertNotIn("@admin", row)
+        self.assertNotIn("#12", row)
         self.assertNotIn("**now**", row)
         self.assertNotIn("`c", row)
+
+    def test_no_invisible_characters_in_the_source(self):
+        with open(os.path.join(ROOT, "pr_comment.py"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertNotIn("\u200b", text)                      # written as an escape, visible in review
 
     def test_size_is_bounded_and_says_how_many_are_left(self):
         missing = {"de": [f"section.key_{i:05d}_" + "x" * 150 for i in range(3000)]}
@@ -416,6 +666,9 @@ class Format(unittest.TestCase):
         body = self.body(check)
         self.assertLess(len(body), 65536)
         self.assertRegex(body, r"\d+ more")
+        rows = self.m.collect(check, sarif=None, strict=False)
+        summary = self.m.build_summary(rows)
+        self.assertLessEqual(len(summary.encode("utf-8")), 512 * 1024)
 
     def test_placeholder_problem_said_once(self):
         with open(os.path.join(FIX, "broken.json"), encoding="utf-8") as f:

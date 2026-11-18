@@ -1,0 +1,33 @@
+{
+  "ok": false,
+  "missing": {},
+  "extra": {},
+  "placeholder_issues": [
+    {
+      "lang": "de",
+      "key": "grüße",
+      "missing": [
+        "{name}"
+      ],
+      "added": [
+        "{nme}"
+      ]
+    }
+  ],
+  "missing_files": [],
+  "faults": [
+    {
+      "lang": "de",
+      "key": "grüße",
+      "msg": "lost placeholder {name}",
+      "severity": "error"
+    },
+    {
+      "lang": "de",
+      "key": "grüße",
+      "msg": "invented placeholder {nme} (not in source)",
+      "severity": "error"
+    }
+  ],
+  "warnings": []
+}
