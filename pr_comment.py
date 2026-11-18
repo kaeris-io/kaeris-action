@@ -434,7 +434,14 @@ def post_comment(args, rows, env):
     base_repo = ((pr.get("base") or {}).get("repo") or {}).get("full_name") or repo
     fork = bool(head_repo) and head_repo != base_repo
     api = GitHub(token, env.get("GITHUB_API_URL") or "https://api.github.com")
-    author = env.get("KA_COMMENT_AUTHOR", "").strip() or DEFAULT_AUTHOR
+    author = env.get("KA_COMMENT_AUTHOR", "").strip()
+    if not author and env.get("KA_TOKEN_IS_DEFAULT", "true") != "true":
+        # A PAT can say who it is; an App installation token cannot (403), and then the POST's
+        # answer below tells us, with a warning to set comment-author.
+        s, me = api.request("GET", "/user")
+        if s == 200 and isinstance(me, dict) and me.get("login"):
+            author = me["login"]
+    author = author or DEFAULT_AUTHOR
     cid = comment_id(args.source, args.out, args.langs_list, env.get("KA_COMMENT_KEY", ""))
     mark = marker(cid)
 
@@ -457,7 +464,8 @@ def post_comment(args, rows, env):
     run_url = None
     if run_id:
         run_url = f"{server}/{repo}/actions/runs/{run_id}" + (f"/attempts/{attempt}" if attempt != "1" else "")
-    cta = _truthy(env.get("KA_CTA", "true")) and \
+    # Same rule as action.yml's bash: only the exact string "false" turns the link off.
+    cta = env.get("KA_CTA", "true") != "false" and \
         env.get("KAERIS_NO_CTA", "").strip().lower() in ("", "0", "false", "no")
     body = build_comment(rows, args.source, args.langs_list, failing,
                          head_sha=(pr.get("head") or {}).get("sha") or env.get("GITHUB_SHA"),
@@ -477,12 +485,25 @@ def post_comment(args, rows, env):
         warn(_denied(status, data, "post" if done == "posted" else "edit", fork))
         return
     url = (data or {}).get("html_url", "") if isinstance(data, dict) else ""
+    poster = ((data or {}).get("user") or {}) if isinstance(data, dict) else {}
+    if poster.get("login") and poster["login"] != author:
+        # The token is not who we looked for (a PAT or App token, no comment-author): the next
+        # push would not find this comment and post another. Say so, and use the real author
+        # for the duplicate sweep below, which keeps it to one comment meanwhile.
+        warn(f"The PR comment was posted as {poster['login']}, not {author}. Set "
+             f"`comment-author: {poster['login']}` so the next push edits it instead of posting again.")
+        author = poster["login"]
     # Two jobs of one matrix can both find nothing and both post. Re-read: the oldest stays,
     # every newer one of ours with this marker goes.
     s2, again = own_comments(api, repo, number, mark, author)
     if s2 == 200 and len(again) > 1:
         for c in again[1:]:
-            api.request("DELETE", f"/repos/{repo}/issues/comments/{c['id']}")
+            s3, d3 = api.request("DELETE", f"/repos/{repo}/issues/comments/{c['id']}")
+            if s3 not in (200, 204):
+                msg = (d3 or {}).get("message", "") if isinstance(d3, dict) else ""
+                warn(f"Could not delete a duplicate PR comment (HTTP {s3}{': ' + msg if msg else ''}); "
+                     f"there are {len(again)} KAERIS comments on this PR, delete the newer ones by hand.")
+                break
         url = again[0].get("html_url", url)
         done += ", kept the older duplicate"
     print(f"{TITLE}: {done} {url}".rstrip())

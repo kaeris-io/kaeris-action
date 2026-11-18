@@ -169,6 +169,62 @@ test/test_summarize.py::Footer::test_translate_does_not_say_free_or_no_key PASSE
 ```
 The repo's CI command `python -m unittest discover -s test -p "test_*.py"`: `Ran 42 tests ... OK`.
 
+### Round 3 (critic: accepted, close before the tag)
+
+What changed:
+1. **PAT / App token without `comment-author`.**
+   - A token other than the default one (`KA_TOKEN_IS_DEFAULT` = `inputs.github-token == github.token`)
+     first tries `GET /user`; a PAT gets its login back. A 403 there is quiet.
+   - After POST/PATCH the author in the response is compared with the expected one. If they
+     differ, the run warns: "posted as X … set `comment-author: X`". It then uses X for the
+     re-read and the duplicate sweep, so the PR keeps at most one comment.
+   - The default token makes no `/user` call.
+2. **`mode` letter case.** Bash lowercases `mode` (the same way `if:` reads it in GitHub) and
+   writes `is-check` to `GITHUB_OUTPUT`. The comment and Gate steps go by
+   `steps.run.outputs.is-check == 'true'`. A mode that is neither check nor translate gives
+   `::error::mode must be check or translate`, exit 2, and the CLI does not run.
+   - Found along the way: in v2.1.0 `mode: Check` died in summarize.py (argparse "invalid
+     choice"), so the critic's scenario (the comment after a translate) was impossible, but
+     only by accident.
+3. **`cta`.** One rule in bash and Python: only the exact `"false"` turns it off (`False`
+   keeps the link, as bash does).
+4. **Gate.** Exit 1 still says "found incomplete/broken translations". Any other non-zero says
+   "kaeris check failed (exit N), see the log above" and keeps that code.
+5. **DELETE of a duplicate.** A non-2xx answer gives a warning ("Could not delete a duplicate
+   … delete the newer ones by hand").
+
+The PAT test went further than the brief asked: with `GET /user` the second push already
+**edits** the comment (PATCH), and the clean push turns it into "no problems". The warning is
+only needed for an App token, and the test checks that it appears there.
+
+УПАЛО (round-3 tests on the round-2 code, 7a26a84), exit 1:
+```
+FAILED test/test_pr_comment.py::PRComment::test_r3_app_token_without_comment_author_warns_and_keeps_one
+FAILED test/test_pr_comment.py::PRComment::test_r3_cta_capital_false_is_not_false_like_bash
+FAILED test/test_pr_comment.py::PRComment::test_r3_gate_says_what_exit_2_means
+FAILED test/test_pr_comment.py::PRComment::test_r3_mode_with_a_capital_is_check_in_every_step
+FAILED test/test_pr_comment.py::PRComment::test_r3_pat_without_comment_author_edits_its_own_comment
+FAILED test/test_pr_comment.py::PRComment::test_r3_refused_delete_of_a_duplicate_warns
+FAILED test/test_pr_comment.py::PRComment::test_r3_unknown_mode_is_a_clear_error
+7 failed, 43 passed in 45.05s
+```
+(`test_r3_default_token_does_not_ask_for_the_user` is a guard and was green already.)
+
+ПРОЙДЕНО, exit 0:
+```
+test/test_pr_comment.py::PRComment::test_r3_app_token_without_comment_author_warns_and_keeps_one PASSED [ 62%]
+test/test_pr_comment.py::PRComment::test_r3_cta_capital_false_is_not_false_like_bash PASSED [ 64%]
+test/test_pr_comment.py::PRComment::test_r3_default_token_does_not_ask_for_the_user PASSED [ 66%]
+test/test_pr_comment.py::PRComment::test_r3_gate_says_what_exit_2_means PASSED [ 68%]
+test/test_pr_comment.py::PRComment::test_r3_mode_with_a_capital_is_check_in_every_step PASSED [ 70%]
+test/test_pr_comment.py::PRComment::test_r3_pat_without_comment_author_edits_its_own_comment PASSED [ 72%]
+test/test_pr_comment.py::PRComment::test_r3_refused_delete_of_a_duplicate_warns PASSED [ 74%]
+test/test_pr_comment.py::PRComment::test_r3_unknown_mode_is_a_clear_error PASSED [ 76%]
+============================= 50 passed in 48.74s =============================
+```
+`unittest discover`: `Ran 50 tests ... OK`. The harness now also reads `if:` the GitHub way,
+with string comparison ignoring case, and evaluates `${{ a == b }}` in env.
+
 ## Decisions
 
 - **`comment` defaults to `true`.** The feature is worth something only if a user of `@v2`

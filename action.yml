@@ -70,8 +70,9 @@ inputs:
     default: ""
   comment-author:
     description: >-
-      check mode: the login the token posts as; only its comments are ever edited. Default
-      github-actions[bot] (the GITHUB_TOKEN). Set it when `github-token` is a PAT or an App token.
+      check mode: the login the token posts as; only its comments are ever edited. Default:
+      github-actions[bot] for the GITHUB_TOKEN; for a PAT it is read from GET /user. An App token
+      cannot say who it is: set it (e.g. my-app[bot]), the job warns with the login to use.
     required: false
     default: ""
   github-token:
@@ -148,6 +149,23 @@ runs:
       # token with pull-requests: write has no business in their environment.
       run: |
         set -e
+        # GitHub's `if:` compares strings ignoring case, bash does not: `mode: Check` used to be
+        # translate here and check in an `if:`. One reading, made here and handed to the later
+        # steps as is-check; anything that is not a mode stops before the CLI runs.
+        mode="$(printf '%s' "$KA_MODE" | tr '[:upper:]' '[:lower:]')"
+        case "$mode" in
+          check|translate) ;;
+          *)
+            echo "::error::mode must be check or translate (got \"$KA_MODE\")"
+            echo "is-check=false" >> "$GITHUB_OUTPUT"
+            exit 2
+            ;;
+        esac
+        if [ "$mode" = "check" ]; then
+          echo "is-check=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is-check=false" >> "$GITHUB_OUTPUT"
+        fi
         out="$KA_OUT"
         [ -z "$out" ] && out="$(dirname "$KA_SOURCE")"
         strict_flag=()
@@ -172,7 +190,7 @@ runs:
         fi
         rm -f "$before_json" "$after_json" "$translate_log" "$summary_file"
 
-        if [ "$KA_MODE" = "check" ]; then
+        if [ "$mode" = "check" ]; then
           # The i18n firewall: static, no API call. Result captured to JSON; exit code decides the gate below.
           set +e
           kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --ci "${strict_flag[@]}" --sarif "$sarif_out" --json > "$after_json"
@@ -214,7 +232,7 @@ runs:
         # QA) — never fabricated. `changed` and `check-exit-code` are appended by this script below.
         [ "$KA_CTA" = "false" ] && export KAERIS_NO_CTA=1
         python3 "${{ github.action_path }}/summarize.py" \
-          --mode "$KA_MODE" \
+          --mode "$mode" \
           --langs "$KA_LANGS" \
           --after "$after_json" \
           --before "$before_json" \
@@ -237,7 +255,7 @@ runs:
 
         # Fail the job on a bad translate run — but only AFTER the summary above is written,
         # so whoever opens the run sees exactly which languages did not make it.
-        if [ "$KA_MODE" != "check" ] && [ "${translate_exit:-0}" != "0" ]; then
+        if [ "$mode" != "check" ] && [ "${translate_exit:-0}" != "0" ]; then
           if [ "${translate_exit}" = "3" ]; then
             echo "::error::Some languages fell back to untranslated source text and were NOT translated — see the log above. Do not merge these locale files."
           else
@@ -251,13 +269,16 @@ runs:
     # pr_comment.py exits 0 on any failure, `|| echo` covers a crash, and the gate is the next step.
     - name: PR comment
       id: comment
-      if: inputs.mode == 'check'
+      if: steps.run.outputs.is-check == 'true'
       shell: bash
       env:
         KA_COMMENT: ${{ inputs.comment }}
         KA_COMMENT_KEY: ${{ inputs.comment-key }}
         KA_COMMENT_AUTHOR: ${{ inputs.comment-author }}
         KA_GITHUB_TOKEN: ${{ inputs.github-token }}
+        # "true" when github-token is the workflow's own token: then we post as
+        # github-actions[bot] and GET /user is pointless (it is 403 for that token).
+        KA_TOKEN_IS_DEFAULT: ${{ inputs.github-token == github.token }}
         KA_CTA: ${{ inputs.cta }}
         KA_SOURCE: ${{ inputs.source }}
         KA_LANGS: ${{ inputs.languages }}
@@ -280,12 +301,17 @@ runs:
           || echo "::warning title=KAERIS PR comment::The PR comment step crashed; the check result still decides the job."
 
     - name: Gate on kaeris check
-      if: inputs.mode == 'check'
+      if: steps.run.outputs.is-check == 'true'
       shell: bash
       env:
         KA_CHECK_EXIT: ${{ steps.run.outputs.check-exit-code }}
       run: |
-        if [ "$KA_CHECK_EXIT" != "0" ]; then
+        # 1 is the CLI's "found something"; anything else (2 bad usage, a crash) is not about
+        # the translations and must not be reported as if it were.
+        if [ "$KA_CHECK_EXIT" = "1" ]; then
           echo "::error::kaeris check found incomplete/broken translations — see the job summary for the language matrix"
+          exit 1
+        elif [ "$KA_CHECK_EXIT" != "0" ]; then
+          echo "::error::kaeris check failed (exit ${KA_CHECK_EXIT:-unknown}), see the log above"
           exit "${KA_CHECK_EXIT:-1}"
         fi

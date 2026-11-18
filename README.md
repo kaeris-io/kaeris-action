@@ -92,7 +92,7 @@ jobs:
 
 | Input | Description | Default |
 |---|---|---|
-| `mode` | `translate` (write locale files) or `check` (i18n firewall, no API call) | `translate` |
+| `mode` | `translate` (write locale files) or `check` (i18n firewall, no API call); case does not matter, anything else is an error | `translate` |
 | `source` | Source strings file, e.g. `locales/en.json` | — (required) |
 | `languages` | Comma-separated target languages, e.g. `es,fr,de,ja` | — (required) |
 | `out` | Directory for translated / target locale files | source's dir |
@@ -105,7 +105,7 @@ jobs:
 | `sarif-file` | `check`: also write a SARIF 2.1.0 report to this path (see below) | — |
 | `comment` | `check` on `pull_request`: keep one PR comment with the findings, edited on every push (see below). `false` turns it off | `true` |
 | `comment-key` | `check`: which comment this check keeps; set it to tell apart two checks over the same files | from `source`, `out`, `languages` |
-| `comment-author` | `check`: the login `github-token` posts as; only its comments are edited. Set it for a PAT or App token | `github-actions[bot]` |
+| `comment-author` | `check`: the login `github-token` posts as; only its comments are edited. Set it for an App token (a PAT's login is read from `GET /user`) | `github-actions[bot]` |
 | `github-token` | Token for the PR comment, passed to that step only | `${{ github.token }}` |
 | `cta` | Link kaeris.dev on the last line of the summary and the PR comment; `false` leaves it out | `true` |
 | `api-url` | API base URL | `https://kaeris.dev` |
@@ -160,8 +160,9 @@ Each file cell links to the line at the PR's head commit. How it behaves:
   "no problems". `comment-key` tells apart two checks over the same files. Change `source`,
   `out` or `languages` and the next run starts a new comment; the old one stays as it was.
 - **Only its own comments.** It edits a comment only if it starts with the marker *and* was
-  posted by `comment-author` (`github-actions[bot]` for the default token). With a PAT or App
-  token, set `comment-author` to its login.
+  posted by `comment-author` (`github-actions[bot]` for the default token, the PAT's own login
+  read from `GET /user`). An App token cannot say who it is: set `comment-author: my-app[bot]`;
+  until you do, the job warns with the login to use and keeps the PR to one comment.
 - **Matrix runs.** If several jobs (an OS matrix) post at the same moment, each re-reads the
   thread and the newer duplicates are deleted: the oldest comment stays.
 - The job summary lists every finding (the comment shows the first 50).
