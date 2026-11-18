@@ -1,0 +1,37 @@
+{
+  "ok": false,
+  "missing": {
+    "de": [
+      "checkout.title"
+    ]
+  },
+  "extra": {},
+  "placeholder_issues": [
+    {
+      "lang": "de",
+      "key": "greeting",
+      "missing": [
+        "{name}"
+      ],
+      "added": [
+        "{nam}"
+      ]
+    }
+  ],
+  "missing_files": [],
+  "faults": [
+    {
+      "lang": "de",
+      "key": "greeting",
+      "msg": "lost placeholder {name}",
+      "severity": "error"
+    },
+    {
+      "lang": "de",
+      "key": "greeting",
+      "msg": "invented placeholder {nam} (not in source)",
+      "severity": "error"
+    }
+  ],
+  "warnings": []
+}
