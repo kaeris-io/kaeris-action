@@ -114,15 +114,22 @@ def parse_action():
 
 
 def resolve(expr, inputs, ctx, outputs):
-    def sub(m):
-        name = m.group(1)
+    def value(name):
+        name = name.strip()
         if name.startswith("inputs."):
             return resolve(inputs.get(name[7:], ""), inputs, ctx, outputs)
         if name.startswith("steps."):
             _, sid, _, out = name.split(".", 3)
             return outputs.get(sid, {}).get(out, "")
         return ctx[name]
-    return re.sub(r"\$\{\{\s*([\w.-]+)\s*\}\}", sub, expr)
+
+    def sub(m):
+        inner = m.group(1)
+        if "==" in inner:                                   # GitHub compares strings ignoring case
+            a, b = inner.split("==", 1)
+            return "true" if value(a).lower() == value(b).lower() else "false"
+        return value(inner)
+    return re.sub(r"\$\{\{\s*([\w.\- =]+?)\s*\}\}", sub, expr)
 
 
 def condition(expr, inputs, outputs, failed):
@@ -133,9 +140,11 @@ def condition(expr, inputs, outputs, failed):
     if e.startswith("${{") and e.endswith("}}"):
         e = e[3:-2].strip()
     uses_status = re.search(r"\b(always|failure|cancelled|success)\(\)", e)
-    e = re.sub(r"inputs\.([\w-]+)", lambda m: repr(inputs.get(m.group(1), "")), e)
+    # GitHub's `==` on strings ignores case ('Check' == 'check' is true): lower both sides.
+    e = re.sub(r"'[^']*'", lambda m: m.group(0).lower(), e)
+    e = re.sub(r"inputs\.([\w-]+)", lambda m: repr(inputs.get(m.group(1), "").lower()), e)
     e = re.sub(r"steps\.([\w-]+)\.outputs\.([\w-]+)",
-               lambda m: repr(outputs.get(m.group(1), {}).get(m.group(2), "")), e)
+               lambda m: repr(outputs.get(m.group(1), {}).get(m.group(2), "").lower()), e)
     e = (e.replace("!cancelled()", "True").replace("always()", "True")
           .replace("failure()", repr(failed)).replace("success()", repr(not failed))
           .replace("&&", " and ").replace("||", " or ").replace("!=", "\0")
@@ -176,6 +185,7 @@ class FakeGitHub:
         self.patch_404 = False    # the comment was deleted between our GET and our PATCH
         self.race = False         # another job of the same matrix posts the same comment first
         self.poster = BOT         # who the token is
+        self.deny_delete = False  # DELETE is refused (403)
         self.comments = []
         self.requests = []
         self.next_id = 1000
@@ -200,6 +210,13 @@ class FakeGitHub:
                 gh.requests.append({"method": method, "path": url.path, "query": parse_qs(url.query),
                                     "body": body, "auth": self.headers.get("Authorization")})
                 if gh.deny == "all" or (gh.deny == "write" and method != "GET"):
+                    return self._send(403, {"message": "Resource not accessible by integration"})
+                if method == "GET" and url.path == "/user":
+                    # A PAT can read its user; GITHUB_TOKEN and App installation tokens cannot.
+                    if gh.poster[1] == "User":
+                        return self._send(200, {"login": gh.poster[0], "type": "User"})
+                    return self._send(403, {"message": "Resource not accessible by integration"})
+                if method == "DELETE" and gh.deny_delete:
                     return self._send(403, {"message": "Resource not accessible by integration"})
                 list_path = f"/repos/{REPO}/issues/{PR}/comments"
                 m = re.match(rf"^/repos/{REPO}/issues/comments/(\d+)$", url.path)
@@ -532,6 +549,76 @@ class PRComment(unittest.TestCase):
         self.assertEqual(len(deletes), 1, r.out)
         self.assertEqual(self.marked()[0]["id"], 1001)        # the rival's, posted first
         self.assertTrue(deletes[0]["path"].endswith("/1002"))
+
+    # Round 3, 1: a PAT or App token without comment-author must not repost on every push
+    def test_r3_pat_without_comment_author_edits_its_own_comment(self):
+        self.gh.poster = ("alice", "User")
+        pat = {"github-token": "ghp_personal_not_real"}
+        r1 = run_action(self.gh, "broken", inputs=pat)
+        r2 = run_action(self.gh, "broken", inputs=pat)
+        self.assertEqual(r2.code, 1, r2.out)
+        self.assertLessEqual(len(self.marked()), 1, r1.out + r2.out)
+        self.assertEqual(len(self.gh.calls("PATCH")), 1, r2.out)     # found via GET /user
+        r3 = run_action(self.gh, "good", inputs={**pat, "source": "test/fixtures/broken/en.json",
+                                                 "languages": "de"})
+        self.assertIn("no problems", self.marked()[0]["body"], r3.out)
+
+    def test_r3_app_token_without_comment_author_warns_and_keeps_one(self):
+        self.gh.poster = ("myapp[bot]", "Bot")
+        app = {"github-token": "ghs_app_installation_not_real"}
+        r1 = run_action(self.gh, "broken", inputs=app)
+        self.assertIn("comment-author: myapp[bot]", r1.out)
+        self.assertIn("::warning", r1.out)
+        r2 = run_action(self.gh, "broken", inputs=app)
+        self.assertLessEqual(len(self.marked()), 1, r2.out)
+        self.assertIn("comment-author: myapp[bot]", r2.out)
+
+    def test_r3_default_token_does_not_ask_for_the_user(self):
+        run_action(self.gh, "broken")
+        self.assertFalse([r for r in self.gh.requests if r["path"] == "/user"])
+
+    # Round 3, 2: `if:` in GitHub ignores case, bash does not
+    def test_r3_mode_with_a_capital_is_check_in_every_step(self):
+        # GitHub's `if:` reads 'Check' as 'check'; bash now does too, and the later steps follow
+        # what the run step decided (is-check), not their own reading of the input.
+        r = run_action(self.gh, "broken", inputs={"mode": "Check"})
+        self.assertEqual(r.code, 1, r.out)
+        self.assertEqual(r.outputs["run"].get("is-check"), "true", r.out)
+        self.assertNotIn("translate", r.args)
+        self.assertEqual(len(self.gh.calls("POST")), 1, r.out)
+        self.assertIn("kaeris check found", r.out)
+
+    def test_r3_unknown_mode_is_a_clear_error(self):
+        r = run_action(self.gh, "good", inputs={"mode": "lint"})
+        self.assertEqual(r.code, 2, r.out)
+        self.assertIn("::error::", r.out)
+        self.assertIn("mode", r.out)
+        self.assertNotIn("usage: summarize.py", r.out)
+        self.assertEqual(self.gh.requests, [])
+        self.assertEqual(r.args, "")                        # the CLI never ran
+
+    # Round 3, 3: one rule for cta in bash and Python: only "false" turns it off
+    def test_r3_cta_capital_false_is_not_false_like_bash(self):
+        r = run_action(self.gh, "broken", inputs={"cta": "False"})
+        body = self.gh.calls("POST")[0]["body"]["body"]
+        self.assertIn("kaeris.dev", body)
+        self.assertIn("kaeris.dev", r.summary)
+
+    # Round 3, 4: exit 2 is not "broken translations"
+    def test_r3_gate_says_what_exit_2_means(self):
+        r = run_action(self.gh, "broken", exit_code=2)
+        self.assertEqual(r.code, 2, r.out)
+        self.assertIn("kaeris check failed (exit 2)", r.out)
+        self.assertNotIn("found incomplete/broken translations", r.out)
+
+    # Round 3, 5: a refused DELETE is said, not swallowed
+    def test_r3_refused_delete_of_a_duplicate_warns(self):
+        self.gh.race = True
+        self.gh.deny_delete = True
+        r = run_action(self.gh, "broken")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertIn("::warning", r.out)
+        self.assertIn("duplicate", r.out)
 
     def test_patch_404_falls_back_to_post(self):
         run_action(self.gh, "broken")
