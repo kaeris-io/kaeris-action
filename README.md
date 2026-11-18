@@ -40,6 +40,9 @@ on: [pull_request]
 permissions:
   contents: read
   pull-requests: write    # for the PR comment with the findings; leave it out and you get none
+concurrency:              # a new push cancels the run of the previous one
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -101,7 +104,10 @@ jobs:
 | `strict` | `check`: also fail on extra/stale keys not in the source | `false` |
 | `sarif-file` | `check`: also write a SARIF 2.1.0 report to this path (see below) | — |
 | `comment` | `check` on `pull_request`: keep one PR comment with the findings, edited on every push (see below). `false` turns it off | `true` |
-| `github-token` | Token for the PR comment | `${{ github.token }}` |
+| `comment-key` | `check`: which comment this check keeps; set it to tell apart two checks over the same files | from `source`, `out`, `languages` |
+| `comment-author` | `check`: the login `github-token` posts as; only its comments are edited. Set it for a PAT or App token | `github-actions[bot]` |
+| `github-token` | Token for the PR comment, passed to that step only | `${{ github.token }}` |
+| `cta` | Link kaeris.dev on the last line of the summary and the PR comment; `false` leaves it out | `true` |
 | `api-url` | API base URL | `https://kaeris.dev` |
 
 ## Outputs
@@ -109,7 +115,7 @@ jobs:
 | Output | Description |
 |---|---|
 | `changed` | `"true"` if `translate` wrote/updated any locale content — open a PR only when this is true |
-| `summary` | Markdown summary (keys translated, per-language matrix, placeholder/overflow counts) — use as a PR body. Its last line links kaeris.dev; set `KAERIS_NO_CTA: "1"` in the step's `env` to leave it out |
+| `summary` | Markdown summary (keys translated, per-language matrix, placeholder/overflow counts) — use as a PR body. Its last line links kaeris.dev; `cta: false` (or `KAERIS_NO_CTA: "1"` in the step's `env`) leaves it out |
 | `missing` | Total missing-key count across all target languages |
 | `placeholder-issues` | Total placeholder-mismatch count (should be `0`) |
 | `check-exit-code` | Exit code of `kaeris check` (0 clean, 1 problem, 2 bad usage) |
@@ -118,13 +124,12 @@ jobs:
 
 ## Findings in a PR comment
 
-In `check` mode on a `pull_request` (or `pull_request_target`) event the action keeps **one**
-comment on the pull request:
+In `check` mode on a `pull_request` event the action keeps **one** comment on the pull request:
 
 ```markdown
 ### KAERIS i18n check: 2 problems to fix
 
-Checked `locales/en.json` against de at `3f2a9c1`: 2 to fix.
+Checked de against `locales/en.json` at `3f2a9c1`.
 
 | File | Key | Language | Problem |
 |---|---|---|---|
@@ -132,23 +137,35 @@ Checked `locales/en.json` against de at `3f2a9c1`: 2 to fix.
 | `locales/de.json:2` | `greeting` | de | lost placeholder {name}; invented placeholder {nam} (not in source) |
 
 The check fails until the problems above are fixed.
-Full report: job summary. Locally: `pip install kaeris`, then `kaeris check --source locales/en.json --langs de`.
+Full report: job summary. Locally: `pip install kaeris`, then `kaeris check --source "locales/en.json" --langs de`.
 ```
 
 Each file cell links to the line at the PR's head commit. How it behaves:
 
-- **Posted only when something blocks the merge.** A clean PR gets no comment at all.
-- **Edited, never repeated.** The next push edits the same comment (found by a hidden marker);
-  when the problems are fixed it reads "no problems", so the reviewer sees they are gone.
+- **Posted only when the check fails.** A clean PR gets no comment at all.
+- **Edited, never repeated.** The next push edits the same comment; when the problems are
+  fixed it reads "no problems", so the reviewer sees they are gone.
 - **Needs `pull-requests: write`.** Add it under `permissions:` (workflow or job). Without it
-  there is no comment, a run with problems gets one warning, and the result does not change: the findings alone make it red or
-  green. A PR from a fork always gets a read-only token, so there is no comment there.
+  there is no comment, a failing run gets one warning, and the result does not change: the
+  findings alone make the job red or green. The token is passed to the comment step only,
+  never to the CLI.
+- **Pull requests from forks get no comment.** GitHub gives them a read-only token; the
+  findings are in the job summary. Do not switch to `pull_request_target` for this: it checks
+  out the base branch, so the check would not see the PR's files, and running PR code there
+  with a write token is how repositories get compromised. The comment runs on `pull_request` only.
 - **Works in private repos without GitHub Advanced Security**, where SARIF annotations do not
   show. Nothing else to install: no App, no account, no key.
-- **One comment per `source`.** Two check steps over two source files keep two comments. In a
-  matrix (several OS) set `comment: false` in all jobs but one, or they race to post it.
+- **One comment per check.** A check is its `source`, `out` and `languages`: a language matrix
+  or two steps keep separate comments, and a clean job never marks a failing job's comment
+  "no problems". `comment-key` tells apart two checks over the same files. Change `source`,
+  `out` or `languages` and the next run starts a new comment; the old one stays as it was.
+- **Only its own comments.** It edits a comment only if it starts with the marker *and* was
+  posted by `comment-author` (`github-actions[bot]` for the default token). With a PAT or App
+  token, set `comment-author` to its login.
+- **Matrix runs.** If several jobs (an OS matrix) post at the same moment, each re-reads the
+  thread and the newer duplicates are deleted: the oldest comment stays.
 - The job summary lists every finding (the comment shows the first 50).
-- `comment: false` turns it off; `KAERIS_NO_CTA: "1"` in the step's `env` drops the kaeris.dev link from its last line.
+- `comment: false` turns it off; `cta: false` drops the kaeris.dev link from its last line.
 
 ## Findings inside the pull request (SARIF)
 
@@ -189,8 +206,9 @@ Change `@v1` to `@v2`. Inputs and outputs are the same. v2 installs `kaeris>=0.2
 (v1 installs `>=0.2.12`), and the Marketplace name is now "KAERIS i18n Check and Translate".
 The `v1` tag stays where it is.
 
-Since v2.2 `check` on a pull request also keeps the PR comment above. Nothing else changes:
-same inputs, same exit codes. A workflow without `pull-requests: write` gets no comment and one
+Since v2.2 `check` on a pull request also keeps the PR comment above. Existing inputs,
+outputs and exit codes are unchanged; the new inputs (`comment`, `comment-key`,
+`comment-author`, `github-token`, `cta`) all have defaults. A workflow without `pull-requests: write` gets no comment and one
 warning on a run that has problems to report (a clean run stays quiet); add the permission to
 get the comment, or `comment: false` to silence the warning.
 

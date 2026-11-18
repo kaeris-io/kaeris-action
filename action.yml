@@ -53,17 +53,35 @@ inputs:
     default: "false"
   comment:
     description: >-
-      check mode, on pull_request / pull_request_target: keep one PR comment with the findings
-      (file, key, language, problem), edited on every push. Posted only when something blocks
-      the merge; a later clean run edits it to "no problems". Needs
-      `permissions: pull-requests: write`; without it the job gets one warning and the check
-      result is unchanged. "false" turns it off.
+      check mode, on pull_request: keep one PR comment with the findings (file, key, language,
+      problem), edited on every push. Posted only when the check fails; a later clean run edits
+      it to "no problems". Needs `permissions: pull-requests: write`; without it (and on a PR
+      from a fork) there is no comment, a failing run gets one warning, the findings are in the
+      job summary and the result is unchanged. Its last line links kaeris.dev unless
+      `cta: false`. "false" turns the comment off.
     required: false
     default: "true"
+  comment-key:
+    description: >-
+      check mode: which comment this check keeps. Default: derived from source, out and
+      languages, so two checks (a language matrix, two steps) keep two comments. Set it to tell
+      apart two checks over the same files.
+    required: false
+    default: ""
+  comment-author:
+    description: >-
+      check mode: the login the token posts as; only its comments are ever edited. Default
+      github-actions[bot] (the GITHUB_TOKEN). Set it when `github-token` is a PAT or an App token.
+    required: false
+    default: ""
   github-token:
-    description: "Token for the PR comment. The default is the workflow's own GITHUB_TOKEN."
+    description: "Token for the PR comment, used in that step only. The default is the workflow's own GITHUB_TOKEN."
     required: false
     default: ${{ github.token }}
+  cta:
+    description: "Link kaeris.dev on the last line of the summary and the PR comment. \"false\" leaves it out."
+    required: false
+    default: "true"
   api-url:
     description: "API base URL."
     required: false
@@ -90,7 +108,7 @@ outputs:
     value: ${{ steps.run.outputs.translate-exit-code }}
   comment-url:
     description: "check mode: URL of the PR comment this run posted or edited; empty when none."
-    value: ${{ steps.run.outputs.comment-url }}
+    value: ${{ steps.comment.outputs.comment-url }}
 
 runs:
   using: composite
@@ -125,8 +143,9 @@ runs:
         KA_ICU: ${{ inputs.icu }}
         KA_STRICT: ${{ inputs.strict }}
         KA_SARIF: ${{ inputs.sarif-file }}
-        KA_COMMENT: ${{ inputs.comment }}
-        KA_GITHUB_TOKEN: ${{ inputs.github-token }}
+        KA_CTA: ${{ inputs.cta }}
+      # No GitHub token here: this step runs the CLI and summarize.py, neither needs one, and a
+      # token with pull-requests: write has no business in their environment.
       run: |
         set -e
         out="$KA_OUT"
@@ -193,6 +212,7 @@ runs:
         # Build the markdown summary + all outputs (missing/placeholder-issues/summary) from the
         # real `kaeris check --json` result (and, in translate mode, the translate log for overflow
         # QA) — never fabricated. `changed` and `check-exit-code` are appended by this script below.
+        [ "$KA_CTA" = "false" ] && export KAERIS_NO_CTA=1
         python3 "${{ github.action_path }}/summarize.py" \
           --mode "$KA_MODE" \
           --langs "$KA_LANGS" \
@@ -207,26 +227,12 @@ runs:
         fi
         cat "$summary_file"
 
-        # One PR comment with the findings, edited on every push, and the full list in the job
-        # summary. It never decides the job: pr_comment.py exits 0 on any failure (a fork's
-        # read-only token is one warning), and the gate below is still `kaeris check`'s exit code.
-        if [ "$KA_MODE" = "check" ]; then
-          python3 "${{ github.action_path }}/pr_comment.py" \
-            --check-json "$after_json" \
-            --sarif "$sarif_out" \
-            --source "$KA_SOURCE" \
-            --langs "$KA_LANGS" \
-            --out "$KA_OUT" \
-            --strict "$KA_STRICT" \
-            --summary-file "${GITHUB_STEP_SUMMARY:-}" \
-            --github-output "$GITHUB_OUTPUT" \
-            || echo "::warning title=KAERIS PR comment::The PR comment step crashed; the check result still decides the job."
-        fi
-
         {
           echo "changed=$changed"
           echo "check-exit-code=$check_exit"
           echo "translate-exit-code=${translate_exit:-0}"
+          echo "check-json=$after_json"
+          echo "sarif=$sarif_out"
         } >> "$GITHUB_OUTPUT"
 
         # Fail the job on a bad translate run — but only AFTER the summary above is written,
@@ -240,7 +246,46 @@ runs:
           exit "$translate_exit"
         fi
 
-        if [ "$KA_MODE" = "check" ] && [ "$check_exit" != "0" ]; then
+    # One PR comment with the findings, edited on every push, and the full list in the job
+    # summary. Its own step so the token reaches nothing else. It never decides the job:
+    # pr_comment.py exits 0 on any failure, `|| echo` covers a crash, and the gate is the next step.
+    - name: PR comment
+      id: comment
+      if: inputs.mode == 'check'
+      shell: bash
+      env:
+        KA_COMMENT: ${{ inputs.comment }}
+        KA_COMMENT_KEY: ${{ inputs.comment-key }}
+        KA_COMMENT_AUTHOR: ${{ inputs.comment-author }}
+        KA_GITHUB_TOKEN: ${{ inputs.github-token }}
+        KA_CTA: ${{ inputs.cta }}
+        KA_SOURCE: ${{ inputs.source }}
+        KA_LANGS: ${{ inputs.languages }}
+        KA_OUT: ${{ inputs.out }}
+        KA_STRICT: ${{ inputs.strict }}
+        KA_CHECK_JSON: ${{ steps.run.outputs.check-json }}
+        KA_SARIF_PATH: ${{ steps.run.outputs.sarif }}
+        KA_CHECK_EXIT: ${{ steps.run.outputs.check-exit-code }}
+      run: |
+        python3 "${{ github.action_path }}/pr_comment.py" \
+          --check-json "$KA_CHECK_JSON" \
+          --check-exit "$KA_CHECK_EXIT" \
+          --sarif "$KA_SARIF_PATH" \
+          --source "$KA_SOURCE" \
+          --langs "$KA_LANGS" \
+          --out "$KA_OUT" \
+          --strict "$KA_STRICT" \
+          --summary-file "${GITHUB_STEP_SUMMARY:-}" \
+          --github-output "$GITHUB_OUTPUT" \
+          || echo "::warning title=KAERIS PR comment::The PR comment step crashed; the check result still decides the job."
+
+    - name: Gate on kaeris check
+      if: inputs.mode == 'check'
+      shell: bash
+      env:
+        KA_CHECK_EXIT: ${{ steps.run.outputs.check-exit-code }}
+      run: |
+        if [ "$KA_CHECK_EXIT" != "0" ]; then
           echo "::error::kaeris check found incomplete/broken translations — see the job summary for the language matrix"
-          exit "$check_exit"
+          exit "${KA_CHECK_EXIT:-1}"
         fi
