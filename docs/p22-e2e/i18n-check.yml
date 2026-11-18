@@ -1,0 +1,26 @@
+# Copy to .github/workflows/i18n-check.yml in the private e2e repo (docs/P22-E2E.md).
+# Pinned to the branch under test, not to a tag: v2.2.0 does not exist until the director cuts it.
+name: i18n check
+on: [pull_request]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: kaeris
+        uses: kaeris-io/kaeris-action@p22-pr-comment
+        with:
+          mode: check
+          source: locales/en.json
+          languages: de,fr
+      - name: Show what the action reported
+        if: always()
+        env:
+          EXIT: ${{ steps.kaeris.outputs.check-exit-code }}
+          URL: ${{ steps.kaeris.outputs.comment-url }}
+        run: echo "check-exit-code=$EXIT comment-url=$URL"
