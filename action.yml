@@ -51,6 +51,19 @@ inputs:
     description: "check mode: also fail if a target locale has extra/stale keys not in the source."
     required: false
     default: "false"
+  comment:
+    description: >-
+      check mode, on pull_request / pull_request_target: keep one PR comment with the findings
+      (file, key, language, problem), edited on every push. Posted only when something blocks
+      the merge; a later clean run edits it to "no problems". Needs
+      `permissions: pull-requests: write`; without it the job gets one warning and the check
+      result is unchanged. "false" turns it off.
+    required: false
+    default: "true"
+  github-token:
+    description: "Token for the PR comment. The default is the workflow's own GITHUB_TOKEN."
+    required: false
+    default: ${{ github.token }}
   api-url:
     description: "API base URL."
     required: false
@@ -75,6 +88,9 @@ outputs:
   translate-exit-code:
     description: "Exit code of `kaeris translate` (0 clean, 3 some languages fell back to source). Non-zero also fails the step."
     value: ${{ steps.run.outputs.translate-exit-code }}
+  comment-url:
+    description: "check mode: URL of the PR comment this run posted or edited; empty when none."
+    value: ${{ steps.run.outputs.comment-url }}
 
 runs:
   using: composite
@@ -109,6 +125,8 @@ runs:
         KA_ICU: ${{ inputs.icu }}
         KA_STRICT: ${{ inputs.strict }}
         KA_SARIF: ${{ inputs.sarif-file }}
+        KA_COMMENT: ${{ inputs.comment }}
+        KA_GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
         set -e
         out="$KA_OUT"
@@ -125,14 +143,20 @@ runs:
         # Clear any scratch files left by a prior invocation of this action earlier in the same
         # job (e.g. a translate step followed by a check step sharing $RUNNER_TEMP) — otherwise a
         # stale "before" snapshot could leak into this run's translated-key count.
+        # SARIF is always written in check mode: it is where the CLI says which file each language
+        # lives in, and the PR comment needs that for its File column. Without `sarif-file` it goes
+        # to a scratch path nobody uploads.
+        sarif_out="$KA_SARIF"
+        if [ -z "$sarif_out" ]; then
+          sarif_out="$RUNNER_TEMP/kaeris-check.sarif"
+          rm -f "$sarif_out"
+        fi
         rm -f "$before_json" "$after_json" "$translate_log" "$summary_file"
 
         if [ "$KA_MODE" = "check" ]; then
           # The i18n firewall: static, no API call. Result captured to JSON; exit code decides the gate below.
           set +e
-          sarif_flag=()
-          [ -n "$KA_SARIF" ] && sarif_flag+=(--sarif "$KA_SARIF")
-          kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --ci "${strict_flag[@]}" "${sarif_flag[@]}" --json > "$after_json"
+          kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --ci "${strict_flag[@]}" --sarif "$sarif_out" --json > "$after_json"
           check_exit=$?
           set -e
         else
@@ -182,6 +206,22 @@ runs:
           cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
         fi
         cat "$summary_file"
+
+        # One PR comment with the findings, edited on every push, and the full list in the job
+        # summary. It never decides the job: pr_comment.py exits 0 on any failure (a fork's
+        # read-only token is one warning), and the gate below is still `kaeris check`'s exit code.
+        if [ "$KA_MODE" = "check" ]; then
+          python3 "${{ github.action_path }}/pr_comment.py" \
+            --check-json "$after_json" \
+            --sarif "$sarif_out" \
+            --source "$KA_SOURCE" \
+            --langs "$KA_LANGS" \
+            --out "$KA_OUT" \
+            --strict "$KA_STRICT" \
+            --summary-file "${GITHUB_STEP_SUMMARY:-}" \
+            --github-output "$GITHUB_OUTPUT" \
+            || echo "::warning title=KAERIS PR comment::The PR comment step crashed; the check result still decides the job."
+        fi
 
         {
           echo "changed=$changed"

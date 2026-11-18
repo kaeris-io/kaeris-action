@@ -37,6 +37,9 @@ OpenRouter key. See [kaeris.dev/pricing](https://kaeris.dev/pricing.html).
 # .github/workflows/i18n-check.yml
 name: i18n check
 on: [pull_request]
+permissions:
+  contents: read
+  pull-requests: write    # for the PR comment with the findings; leave it out and you get none
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -49,7 +52,9 @@ jobs:
           languages: es,fr,de,ja
 ```
 
-A broken or incomplete translation now fails the check and can't merge. Add it as a required status check in branch protection to make it a hard gate.
+A broken or incomplete translation now fails the check and can't merge, and the PR gets one
+comment saying which file, key and language broke ([below](#findings-in-a-pr-comment)). Add the
+job as a required status check in branch protection to make it a hard gate.
 
 ### Auto-translate new strings into a PR
 
@@ -95,6 +100,8 @@ jobs:
 | `icu` | `translate`: hint that strings use ICU MessageFormat (plurals/select) so it's preserved | `false` |
 | `strict` | `check`: also fail on extra/stale keys not in the source | `false` |
 | `sarif-file` | `check`: also write a SARIF 2.1.0 report to this path (see below) | — |
+| `comment` | `check` on `pull_request`: keep one PR comment with the findings, edited on every push (see below). `false` turns it off | `true` |
+| `github-token` | Token for the PR comment | `${{ github.token }}` |
 | `api-url` | API base URL | `https://kaeris.dev` |
 
 ## Outputs
@@ -107,6 +114,41 @@ jobs:
 | `placeholder-issues` | Total placeholder-mismatch count (should be `0`) |
 | `check-exit-code` | Exit code of `kaeris check` (0 clean, 1 problem, 2 bad usage) |
 | `translate-exit-code` | Exit code of `kaeris translate` (0 clean, 3 some languages fell back to the source); non-zero also fails the step |
+| `comment-url` | `check`: URL of the PR comment this run posted or edited; empty when none |
+
+## Findings in a PR comment
+
+In `check` mode on a `pull_request` (or `pull_request_target`) event the action keeps **one**
+comment on the pull request:
+
+```markdown
+### KAERIS i18n check: 2 problems to fix
+
+Checked `locales/en.json` against de at `3f2a9c1`: 2 to fix.
+
+| File | Key | Language | Problem |
+|---|---|---|---|
+| `locales/de.json` | `checkout.title` | de | missing in this language |
+| `locales/de.json:2` | `greeting` | de | lost placeholder {name}; invented placeholder {nam} (not in source) |
+
+The check fails until the problems above are fixed.
+Full report: job summary. Locally: `pip install kaeris`, then `kaeris check --source locales/en.json --langs de`.
+```
+
+Each file cell links to the line at the PR's head commit. How it behaves:
+
+- **Posted only when something blocks the merge.** A clean PR gets no comment at all.
+- **Edited, never repeated.** The next push edits the same comment (found by a hidden marker);
+  when the problems are fixed it reads "no problems", so the reviewer sees they are gone.
+- **Needs `pull-requests: write`.** Add it under `permissions:` (workflow or job). Without it
+  there is no comment, a run with problems gets one warning, and the result does not change: the findings alone make it red or
+  green. A PR from a fork always gets a read-only token, so there is no comment there.
+- **Works in private repos without GitHub Advanced Security**, where SARIF annotations do not
+  show. Nothing else to install: no App, no account, no key.
+- **One comment per `source`.** Two check steps over two source files keep two comments. In a
+  matrix (several OS) set `comment: false` in all jobs but one, or they race to post it.
+- The job summary lists every finding (the comment shows the first 50).
+- `comment: false` turns it off; `KAERIS_NO_CTA: "1"` in the step's `env` drops the kaeris.dev link from its last line.
 
 ## Findings inside the pull request (SARIF)
 
@@ -134,7 +176,8 @@ step is broken".
 
 Note on visibility: code-scanning uploads are free on public repositories; on private ones
 they need GitHub Advanced Security. Without it the gate still works exactly as before — the
-job fails and the log lists every finding — you just do not get the inline annotations.
+job fails, the PR comment and the job summary list every finding — you just do not get the
+inline annotations.
 
 ## What it protects against
 
@@ -145,6 +188,11 @@ The deterministic checks (no API needed) catch the bugs that actually break apps
 Change `@v1` to `@v2`. Inputs and outputs are the same. v2 installs `kaeris>=0.2.39`
 (v1 installs `>=0.2.12`), and the Marketplace name is now "KAERIS i18n Check and Translate".
 The `v1` tag stays where it is.
+
+Since v2.2 `check` on a pull request also keeps the PR comment above. Nothing else changes:
+same inputs, same exit codes. A workflow without `pull-requests: write` gets no comment and one
+warning on a run that has problems to report (a clean run stays quiet); add the permission to
+get the comment, or `comment: false` to silence the warning.
 
 ## Links
 

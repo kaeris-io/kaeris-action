@@ -294,7 +294,8 @@ class PRComment(unittest.TestCase):
     # (c) clean after broken: the comment says so and the job is green
     def test_c_clean_run_updates_existing_comment_to_clean(self):
         run_step(self.gh, "broken")
-        r = run_step(self.gh, "good")
+        # the next push of the same PR: same source file, now clean
+        r = run_step(self.gh, "good", inputs={"source": "test/fixtures/broken/en.json"})
         self.assertEqual(r.code, 0, r.out)
         self.assertEqual(len(self.gh.calls("POST")), 1)
         self.assertEqual(len(self.gh.calls("PATCH")), 1, r.out)
@@ -318,10 +319,11 @@ class PRComment(unittest.TestCase):
         self.assertIn("pull-requests: write", r.out)
         self.assertNotIn(TOKEN, r.out)
 
-    def test_d_forbidden_clean_stays_green(self):
+    def test_d_forbidden_clean_stays_green_and_quiet(self):
         self.gh.deny = True
         r = run_step(self.gh, "good")
         self.assertEqual(r.code, 0, r.out)
+        self.assertNotIn("::warning", r.out)       # nothing to report: no noise on every clean PR
 
     def test_d_forbidden_broken_same_repo(self):
         self.gh.deny = True
