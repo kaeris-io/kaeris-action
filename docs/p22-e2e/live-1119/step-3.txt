@@ -1,0 +1,297 @@
+### run 44407745949 view
+
+X broken i18n check kaeris-io/kaeris-action-e2e#1 · 44407745949
+Triggered via pull_request less than a minute ago
+
+JOBS
+X check in 13s (ID 135167380660)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  X Run kaeris-io/kaeris-action@p22-pr-comment
+  ✓ Show what the action reported
+  ✓ Post Run kaeris-io/kaeris-action@p22-pr-comment
+  ✓ Post Run actions/checkout@v4
+  ✓ Complete job
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+check: .github#2
+
+X Process completed with exit code 1.
+check: .github#260
+
+X kaeris check found incomplete/broken translations — see the job summary for the language matrix
+check: .github#259
+
+- "The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748"
+check: .github#1
+
+
+To see what failed, try: gh run view 44407745949 --log-failed
+View this run on GitHub: https://github.com/kaeris-io/kaeris-action-e2e/actions/runs/44407745949
+
+### log-failed
+check	Run kaeris-io/kaeris-action@p22-pr-comment	﻿2026-11-18T22:03:21.8024246Z ##[group]Run kaeris-io/kaeris-action@p22-pr-comment
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8025610Z with:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8026410Z   mode: check
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8027266Z   source: locales/en.json
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8028230Z   languages: de,fr
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8029090Z   only-new: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8029938Z   icu: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8030754Z   strict: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8031769Z   comment: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8040135Z   github-token: ***
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8041154Z   cta: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8042036Z   api-url: https://kaeris.dev
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8043046Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8134194Z ##[start-action display=Set up Python;id=kaeris.__actions_setup-python]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8303969Z ##[group]Run actions/setup-python@v5
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8305165Z with:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8306014Z   python-version: 3.x
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8306962Z   check-latest: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8315067Z   token: ***
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8315973Z   update-environment: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8317099Z   allow-prereleases: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8318101Z   freethreaded: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:21.8319030Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0122836Z ##[group]Installed versions
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0276243Z (node:2196) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0281429Z (Use `node --trace-deprecation ...` to show where the warning was created)
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0304763Z Successfully set up CPython (3.15.2)
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0308790Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0478699Z ##[end-action id=kaeris.__actions_setup-python;outcome=success;conclusion=success;duration_ms=234]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0489896Z ##[start-action display=Install KAERIS CLI;id=kaeris.__run]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0586322Z ##[group]Run pip install "kaeris>=0.2.39"
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0588520Z ^[[36;1mpip install "kaeris>=0.2.39"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0722733Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0725083Z env:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0726870Z   pythonLocation: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0729726Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib/pkgconfig
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0732752Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0735234Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0737673Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0740343Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:22.0742852Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.2025936Z Collecting kaeris>=0.2.39
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.2813092Z   Downloading kaeris-0.2.43-py3-none-any.whl.metadata (35 kB)
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.3398865Z Downloading kaeris-0.2.43-py3-none-any.whl (158 kB)
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.7752565Z Installing collected packages: kaeris
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9131375Z Successfully installed kaeris-0.2.43
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9922085Z ##[end-action id=kaeris.__run;outcome=success;conclusion=success;duration_ms=3942]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9959249Z ##[start-action display=Run KAERIS (check);id=kaeris.run]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9994910Z ##[group]Run set -e
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9995274Z ^[[36;1mset -e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9995699Z ^[[36;1m# GitHub's `if:` compares strings ignoring case, bash does not: `mode: Check` used to be^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9996344Z ^[[36;1m# translate here and check in an `if:`. One reading, made here and handed to the later^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9996938Z ^[[36;1m# steps as is-check; anything that is not a mode stops before the CLI runs.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9997445Z ^[[36;1mmode="$(printf '%s' "$KA_MODE" | tr '[:upper:]' '[:lower:]')"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9997823Z ^[[36;1mcase "$mode" in^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9998078Z ^[[36;1m  check|translate) ;;^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9998358Z ^[[36;1m  *)^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9998691Z ^[[36;1m    echo "::error::mode must be check or translate (got \"$KA_MODE\")"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9999131Z ^[[36;1m    echo "is-check=false" >> "$GITHUB_OUTPUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9999720Z ^[[36;1m    exit 2^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:25.9999949Z ^[[36;1m    ;;^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0000158Z ^[[36;1mesac^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0000376Z ^[[36;1mif [ "$mode" = "check" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0000695Z ^[[36;1m  echo "is-check=true" >> "$GITHUB_OUTPUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0001333Z ^[[36;1melse^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0001594Z ^[[36;1m  echo "is-check=false" >> "$GITHUB_OUTPUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0001898Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0002105Z ^[[36;1mout="$KA_OUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0002381Z ^[[36;1m[ -z "$out" ] && out="$(dirname "$KA_SOURCE")"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0002718Z ^[[36;1mstrict_flag=()^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0003027Z ^[[36;1m[ "$KA_STRICT" = "true" ] && strict_flag+=(--strict)^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0003380Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0003658Z ^[[36;1mbefore_json="$RUNNER_TEMP/kaeris-check-before.json"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0004072Z ^[[36;1mafter_json="$RUNNER_TEMP/kaeris-check-after.json"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0004486Z ^[[36;1mtranslate_log="$RUNNER_TEMP/kaeris-translate.log"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0004870Z ^[[36;1msummary_file="$RUNNER_TEMP/kaeris-summary.md"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0005185Z ^[[36;1mchanged=false^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0005402Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0005776Z ^[[36;1m# Clear any scratch files left by a prior invocation of this action earlier in the same^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0006411Z ^[[36;1m# job (e.g. a translate step followed by a check step sharing $RUNNER_TEMP) — otherwise a^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0007009Z ^[[36;1m# stale "before" snapshot could leak into this run's translated-key count.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0007596Z ^[[36;1m# SARIF is always written in check mode: it is where the CLI says which file each language^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0008224Z ^[[36;1m# lives in, and the PR comment needs that for its File column. Without `sarif-file` it goes^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0008737Z ^[[36;1m# to a scratch path nobody uploads.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0009049Z ^[[36;1msarif_out="$KA_SARIF"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0009338Z ^[[36;1mif [ -z "$sarif_out" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0009662Z ^[[36;1m  sarif_out="$RUNNER_TEMP/kaeris-check.sarif"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0010021Z ^[[36;1m  rm -f "$sarif_out"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0010259Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0010571Z ^[[36;1mrm -f "$before_json" "$after_json" "$translate_log" "$summary_file"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0011199Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0011421Z ^[[36;1mif [ "$mode" = "check" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0011914Z ^[[36;1m  # The i18n firewall: static, no API call. Result captured to JSON; exit code decides the gate below.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0012406Z ^[[36;1m  set +e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0012927Z ^[[36;1m  kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --ci "${strict_flag[@]}" --sarif "$sarif_out" --json > "$after_json"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0013510Z ^[[36;1m  check_exit=$?^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0013745Z ^[[36;1m  set -e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0013949Z ^[[36;1melse^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0014522Z ^[[36;1m  # Baseline ("before") snapshot for an honest "N keys translated" count — best-effort;^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0015110Z ^[[36;1m  # e.g. the very first run with no target files yet still produces valid JSON.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0015759Z ^[[36;1m  kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --json > "$before_json" 2>/dev/null || true^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0016275Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0016569Z ^[[36;1m  args=(translate "$KA_SOURCE" --langs "$KA_LANGS" --out "$out")^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0016996Z ^[[36;1m  [ "$KA_ONLY_NEW" = "true" ] && args+=(--only-new)^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0017363Z ^[[36;1m  [ -n "$KA_TONE" ] && args+=(--tone "$KA_TONE")^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0017699Z ^[[36;1m  [ "$KA_ICU" = "true" ] && args+=(--icu)^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0018132Z ^[[36;1m  # `set -e` does NOT catch this: a pipeline's status is the status of its LAST^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0018708Z ^[[36;1m  # command, and `tee` always succeeds. So every non-zero exit from `kaeris translate`^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0019454Z ^[[36;1m  # was swallowed and the action carried on as if the run had gone fine — including^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0020028Z ^[[36;1m  # exit 3, "some languages fell back to untranslated source text". The customer's^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0020625Z ^[[36;1m  # workflow then opened a PR with English sitting in de.json, green tick and all.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0021570Z ^[[36;1m  # `kaeris check` does not save us here either: a fallen-back string is present and^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0022169Z ^[[36;1m  # structurally identical to the source, so it is a YELLOW warning, not a failure.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0022602Z ^[[36;1m  set +e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0022863Z ^[[36;1m  kaeris "${args[@]}" 2>&1 | tee "$translate_log"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0023207Z ^[[36;1m  translate_exit=${PIPESTATUS[0]}^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0023495Z ^[[36;1m  set -e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0023702Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0023890Z ^[[36;1m  set +e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0024276Z ^[[36;1m  kaeris check --source "$KA_SOURCE" --langs "$KA_LANGS" --out "$out" --json > "$after_json"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0024751Z ^[[36;1m  check_exit=$?^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0024984Z ^[[36;1m  set -e^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0025189Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0025477Z ^[[36;1m  if [ -n "$(git status --porcelain -- "$out" 2>/dev/null)" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0025850Z ^[[36;1m    changed=true^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0026096Z ^[[36;1m  fi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0026292Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0026484Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0026858Z ^[[36;1m# Build the markdown summary + all outputs (missing/placeholder-issues/summary) from the^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0027491Z ^[[36;1m# real `kaeris check --json` result (and, in translate mode, the translate log for overflow^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0028143Z ^[[36;1m# QA) — never fabricated. `changed` and `check-exit-code` are appended by this script below.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0028675Z ^[[36;1m[ "$KA_CTA" = "false" ] && export KAERIS_NO_CTA=1^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0029223Z ^[[36;1mpython3 "/home/runner/work/_actions/kaeris-io/kaeris-action/p22-pr-comment/summarize.py" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0029705Z ^[[36;1m  --mode "$mode" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0029962Z ^[[36;1m  --langs "$KA_LANGS" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0030230Z ^[[36;1m  --after "$after_json" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0030511Z ^[[36;1m  --before "$before_json" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0030962Z ^[[36;1m  --log "$translate_log" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0031300Z ^[[36;1m  --out-file "$summary_file" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0031616Z ^[[36;1m  --github-output "$GITHUB_OUTPUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0031902Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0032139Z ^[[36;1mif [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0032495Z ^[[36;1m  cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0032801Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0033006Z ^[[36;1mcat "$summary_file"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0033243Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0033432Z ^[[36;1m{^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0033650Z ^[[36;1m  echo "changed=$changed"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0034120Z ^[[36;1m  echo "check-exit-code=$check_exit"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0034490Z ^[[36;1m  echo "translate-exit-code=${translate_exit:-0}"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0034842Z ^[[36;1m  echo "check-json=$after_json"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0035131Z ^[[36;1m  echo "sarif=$sarif_out"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0035400Z ^[[36;1m} >> "$GITHUB_OUTPUT"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0035639Z ^[[36;1m^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0036003Z ^[[36;1m# Fail the job on a bad translate run — but only AFTER the summary above is written,^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0036692Z ^[[36;1m# so whoever opens the run sees exactly which languages did not make it.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0037185Z ^[[36;1mif [ "$mode" != "check" ] && [ "${translate_exit:-0}" != "0" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0037597Z ^[[36;1m  if [ "${translate_exit}" = "3" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0038280Z ^[[36;1m    echo "::error::Some languages fell back to untranslated source text and were NOT translated — see the log above. Do not merge these locale files."^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0039117Z ^[[36;1m  else^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0039504Z ^[[36;1m    echo "::error::kaeris translate failed (exit ${translate_exit}) — see the log above."^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0039952Z ^[[36;1m  fi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0040167Z ^[[36;1m  exit "$translate_exit"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0040419Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0089894Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0090272Z env:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0090559Z   pythonLocation: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0091132Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib/pkgconfig
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0091579Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0091963Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0092354Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0092738Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0093091Z   KAERIS_API_KEY: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0093317Z   KAERIS_OPENROUTER_KEY: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0093604Z   KAERIS_API_URL: https://kaeris.dev
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0093894Z   KA_MODE: check
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0094114Z   KA_SOURCE: locales/en.json
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0094348Z   KA_LANGS: de,fr
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0094551Z   KA_OUT: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0094743Z   KA_ONLY_NEW: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0094943Z   KA_TONE: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0095132Z   KA_ICU: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0095332Z   KA_STRICT: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0095533Z   KA_SARIF: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0095723Z   KA_CTA: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.0095933Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4319047Z ## KAERIS i18n — CI check
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4319736Z 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4320245Z Placeholder-loss: **1** (should be 0).
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4321506Z Missing keys remaining: **1**.
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4322113Z 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4322693Z | Language | Status | Missing | Placeholder issues | Translated |
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4323714Z |---|---|---|---|---|
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4324660Z | de | ⚠ 1 missing, 1 placeholder issue | 1 | 1 | – |
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4325689Z | fr | ✓ complete | 0 | 0 | – |
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4326244Z 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4326893Z _Generated from `kaeris check --json` — no fabricated numbers._
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4327609Z 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4328530Z <sub>Checked by [KAERIS](https://kaeris.dev/?utm_source=action) · free check, no key</sub>
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4386136Z ##[end-action id=kaeris.run;outcome=success;conclusion=success;duration_ms=442]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4397023Z ##[start-action display=PR comment;id=kaeris.comment]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4421937Z ##[group]Run python3 "/home/runner/work/_actions/kaeris-io/kaeris-action/p22-pr-comment/pr_comment.py" \
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4422708Z ^[[36;1mpython3 "/home/runner/work/_actions/kaeris-io/kaeris-action/p22-pr-comment/pr_comment.py" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4423248Z ^[[36;1m  --check-json "$KA_CHECK_JSON" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4423563Z ^[[36;1m  --check-exit "$KA_CHECK_EXIT" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4424061Z ^[[36;1m  --sarif "$KA_SARIF_PATH" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4424337Z ^[[36;1m  --source "$KA_SOURCE" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4424607Z ^[[36;1m  --langs "$KA_LANGS" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4424865Z ^[[36;1m  --out "$KA_OUT" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4425113Z ^[[36;1m  --strict "$KA_STRICT" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4425417Z ^[[36;1m  --summary-file "${GITHUB_STEP_SUMMARY:-}" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4425760Z ^[[36;1m  --github-output "$GITHUB_OUTPUT" \^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4426305Z ^[[36;1m  || echo "::warning title=KAERIS PR comment::The PR comment step crashed; the check result still decides the job."^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4476273Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4476649Z env:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4476933Z   pythonLocation: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4477373Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib/pkgconfig
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4478026Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4478436Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4478821Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4479202Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4479534Z   KA_COMMENT: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4479741Z   KA_COMMENT_KEY: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4479946Z   KA_COMMENT_AUTHOR: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4483017Z   KA_GITHUB_TOKEN: ***
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4483288Z   KA_TOKEN_IS_DEFAULT: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4483525Z   KA_CTA: true
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4483733Z   KA_SOURCE: locales/en.json
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4483969Z   KA_LANGS: de,fr
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4484168Z   KA_OUT: 
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4484359Z   KA_STRICT: false
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4484658Z   KA_CHECK_JSON: /home/runner/work/_temp/kaeris-check-after.json
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4485084Z   KA_SARIF_PATH: /home/runner/work/_temp/kaeris-check.sarif
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4485420Z   KA_CHECK_EXIT: 1
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:26.4485634Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.8950063Z KAERIS PR comment: posted https://github.com/kaeris-io/kaeris-action-e2e/pull/1#issuecomment-6992938354
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9148593Z ##[end-action id=kaeris.comment;outcome=success;conclusion=success;duration_ms=1475]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9155220Z ##[start-action display=Gate on kaeris check;id=kaeris.__run_2]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9189980Z ##[group]Run # 1 is the CLI's "found something"; anything else (2 bad usage, a crash) is not about
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9191482Z ^[[36;1m# 1 is the CLI's "found something"; anything else (2 bad usage, a crash) is not about^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9192498Z ^[[36;1m# the translations and must not be reported as if it were.^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9193210Z ^[[36;1mif [ "$KA_CHECK_EXIT" = "1" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9194253Z ^[[36;1m  echo "::error::kaeris check found incomplete/broken translations — see the job summary for the language matrix"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9195271Z ^[[36;1m  exit 1^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9195745Z ^[[36;1melif [ "$KA_CHECK_EXIT" != "0" ]; then^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9196590Z ^[[36;1m  echo "::error::kaeris check failed (exit ${KA_CHECK_EXIT:-unknown}), see the log above"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9197442Z ^[[36;1m  exit "${KA_CHECK_EXIT:-1}"^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9197928Z ^[[36;1mfi^[[0m
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9273388Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9274031Z env:
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9274511Z   pythonLocation: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9275319Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib/pkgconfig
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9276104Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9276857Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9277560Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.15.2/x64
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9278267Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.15.2/x64/lib
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9278896Z   KA_CHECK_EXIT: 1
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9279607Z ##[endgroup]
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9424876Z ##[error]kaeris check found incomplete/broken translations — see the job summary for the language matrix
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9427527Z ##[error]Process completed with exit code 1.
+check	Run kaeris-io/kaeris-action@p22-pr-comment	2026-11-18T22:03:27.9435520Z ##[end-action id=kaeris.__run_2;outcome=failure;conclusion=failure;duration_ms=27]
+
+### comments
+[{"url":"https://api.github.com/repos/kaeris-io/kaeris-action-e2e/issues/comments/6992938354","html_url":"https://github.com/kaeris-io/kaeris-action-e2e/pull/1#issuecomment-6992938354","issue_url":"https://api.github.com/repos/kaeris-io/kaeris-action-e2e/issues/1","id":6992938354,"node_id":"IC_kwDOVzl8sM8AAAABoM_Fcg","user":{"login":"github-actions[bot]","id":41898282,"node_id":"MDM6Qm90NDE4OTgyODI=","avatar_url":"https://avatars.githubusercontent.com/in/15368?v=4","gravatar_id":"","url":"https://api.github.com/users/github-actions%5Bbot%5D","html_url":"https://github.com/apps/github-actions","followers_url":"https://api.github.com/users/github-actions%5Bbot%5D/followers","following_url":"https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}","gists_url":"https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}","starred_url":"https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}","subscriptions_url":"https://api.github.com/users/github-actions%5Bbot%5D/subscriptions","organizations_url":"https://api.github.com/users/github-actions%5Bbot%5D/orgs","repos_url":"https://api.github.com/users/github-actions%5Bbot%5D/repos","events_url":"https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}","received_events_url":"https://api.github.com/users/github-actions%5Bbot%5D/received_events","type":"Bot","user_view_type":"public","site_admin":false},"created_at":"2026-11-18T22:03:27Z","updated_at":"2026-11-18T22:03:27Z","body":"<!-- kaeris-action check 06d9e1556607 -->\n### KAERIS i18n check: 2 problems to fix\n\nChecked de, fr against `locales/en.json` at `f5e8f51`.\n\n| File | Key | Language | Problem |\n|---|---|---|---|\n| [`locales/de.json`](https://github.com/kaeris-io/kaeris-action-e2e/blob/f5e8f514b282362eb65fef83b7b5b77bb73e7729/locales/de.json) | `checkout.title` | de | missing in this language |\n| [`locales/de.json:2`](https://github.com/kaeris-io/kaeris-action-e2e/blob/f5e8f514b282362eb65fef83b7b5b77bb73e7729/locales/de.json#L2) | `greeting` | de | lost placeholder {name}; invented placeholder {nam} (not in source) |\n\nThe check fails until the problems above are fixed.\nFull report: [job summary](https://github.com/kaeris-io/kaeris-action-e2e/actions/runs/44407745949). Locally: `pip install kaeris`, then `kaeris check --source \"locales/en.json\" --langs de,fr`.\n\n<sub>Checked by [KAERIS](https://kaeris.dev/?utm_source=action-comment) (free, no API key). Updated on every push; `comment: false` turns it off.</sub>\n","author_association":"NONE","reactions":{"url":"https://api.github.com/repos/kaeris-io/kaeris-action-e2e/issues/comments/6992938354/reactions","total_count":0,"+1":0,"-1":0,"laugh":0,"hooray":0,"confused":0,"heart":0,"rocket":0,"eyes":0},"performed_via_github_app":{"id":15368,"client_id":"Iv1.05c79e9ad1f6bdfa","slug":"github-actions","node_id":"MDM6QXBwMTUzNjg=","owner":{"login":"github","id":9919,"node_id":"MDEyOk9yZ2FuaXphdGlvbjk5MTk=","avatar_url":"https://avatars.githubusercontent.com/u/9919?v=4","gravatar_id":"","url":"https://api.github.com/users/github","html_url":"https://github.com/github","followers_url":"https://api.github.com/users/github/followers","following_url":"https://api.github.com/users/github/following{/other_user}","gists_url":"https://api.github.com/users/github/gists{/gist_id}","starred_url":"https://api.github.com/users/github/starred{/owner}{/repo}","subscriptions_url":"https://api.github.com/users/github/subscriptions","organizations_url":"https://api.github.com/users/github/orgs","repos_url":"https://api.github.com/users/github/repos","events_url":"https://api.github.com/users/github/events{/privacy}","received_events_url":"https://api.github.com/users/github/received_events","type":"Organization","user_view_type":"public","site_admin":false},"name":"GitHub Actions","description":"Automate your workflow from idea to production","external_url":"https://help.github.com/en/actions","html_url":"https://github.com/apps/github-actions","created_at":"2018-07-30T09:30:17Z","updated_at":"2026-06-18T16:17:48Z","permissions":{"actions":"write","administration":"read","artifact_metadata":"write","attestations":"write","checks":"write","code_quality":"write","contents":"write","copilot_requests":"write","deployments":"write","discussions":"write","drives":"write","issues":"write","merge_queues":"write","metadata":"read","models":"read","packages":"write","pages":"write","pull_requests":"write","repository_hooks":"write","repository_projects":"write","security_events":"write","statuses":"write","vulnerability_alerts":"read"},"events":["branch_protection_rule","check_run","check_suite","create","delete","deployment","deployment_status","discussion","discussion_comment","fork","gollum","issues","issue_comment","label","merge_group","milestone","page_build","public","pull_request","pull_request_review","pull_request_review_comment","push","registry_package","release","repository","repository_dispatch","status","watch","workflow_dispatch","workflow_run"]},"minimized":null}]
