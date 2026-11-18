@@ -22,6 +22,11 @@ the keys you added into 46 languages and open a pull request with the result.
   the line of the locale file in the pull request.
 - **`translate`**: translates only the keys that are new or changed since the last run, writes
   the locale files, and returns `changed` and a Markdown `summary` for the pull request body.
+- **Names, terms and models from your repository**: `kaeris.json` and `kaeris-glossary.json`
+  at the root keep brand names as written, make each language use the agreed word for a term,
+  and on Lifetime pick the model per language ([below](#brand-names-glossary-and-models)).
+- **Translation memory**: `kaeris-tm.json` remembers translations by text, so a renamed key is
+  reused, not paid for again ([below](#translation-memory)).
 - **13 formats** in both modes: JSON, YAML, `.strings`, `.xcstrings`, `.po`, ARB, Android XML,
   CSV, XLIFF, `.properties`, `.resx`, Fluent and Markdown.
 
@@ -87,6 +92,50 @@ jobs:
           body: ${{ steps.kaeris.outputs.summary }}
           branch: i18n/update
 ```
+
+### Brand names, glossary and models
+
+The action runs the CLI from the root of your repository, so files there apply to every run
+without an input: `kaeris.json` to `translate`, `kaeris-glossary.json` to both modes.
+
+`kaeris.json`:
+
+```json
+{
+  "keep": ["KAERIS", "GitHub"],
+  "glossary_file": "kaeris-glossary.json"
+}
+```
+
+`kaeris-glossary.json`:
+
+```json
+{"terms": [
+  {"term": "workspace", "translations": {"de": "Arbeitsbereich", "fr": "espace de travail"}}
+]}
+```
+
+- **`keep`**: words left exactly as written in every language.
+- **The glossary**: the word each language must use for a term. `translate` gives the terms to
+  the model; `check` fails a translation that says the term another way (in languages whose
+  words change shape, such as German or Russian, a miss is a warning, because an inflected form
+  can still be right).
+- **`models`** (Lifetime, with `openrouter-key`): one OpenRouter model per language, e.g.
+  `"models": {"de": "anthropic/claude-sonnet-4.5", "ja": "google/gemini-2.5-pro"}`. A language
+  that is not listed uses the default model. Other plans refuse it with HTTP 403 before anything
+  is started or charged.
+
+The same settings work locally with `pip install kaeris`; the CLI docs have a runnable example:
+[kaeris.dev/docs/cli](https://kaeris.dev/docs/cli#cli-terms).
+
+### Translation memory
+
+`translate` saves every translation to `kaeris-tm.json` next to the source and, on the next run,
+looks each line up by its text, not its key. A renamed key, a string moved to another file or a
+fresh clone gets the saved translation and is not charged again. The file sits next to
+`kaeris.lock`, and the pull request from `create-pull-request` carries both with the locale
+files: keep them committed. A line saved under another tone, glossary or model is translated
+again.
 
 ## Inputs
 
