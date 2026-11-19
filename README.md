@@ -271,6 +271,30 @@ outputs and exit codes are unchanged; the new inputs (`comment`, `comment-key`,
 warning on a run that has problems to report (a clean run stays quiet); add the permission to
 get the comment, or `comment: false` to silence the warning.
 
+## Keep a CLI version
+
+The action sets up its own Python and installs the newest `kaeris` from PyPI on every run. To
+stay on one version, give pip a constraint before the action; the action's own `pip install`
+obeys it:
+
+```yaml
+- name: Keep the KAERIS CLI at 0.2.43
+  shell: bash
+  run: |
+    echo "kaeris==0.2.43" > "$RUNNER_TEMP/kaeris-pin.txt"
+    echo "PIP_CONSTRAINT=$RUNNER_TEMP/kaeris-pin.txt" >> "$GITHUB_ENV"
+- uses: kaeris-io/kaeris-action@v2
+  with:
+    mode: check
+    source: locales/en.json
+    languages: de,fr
+```
+
+A `pip install "kaeris==0.2.43"` step before the action does not do it: that installs into
+another Python, and the action then installs the newest CLI into its own. `PIP_CONSTRAINT` holds
+for every later `pip install` in the job, and the file names only `kaeris`. The action asks for
+0.2.39 or later, so pin 0.2.39 or newer.
+
 ## Links
 
 - Website and docs: [kaeris.dev](https://kaeris.dev), [GitHub Actions recipe](https://kaeris.dev/ci-github-actions.html)
