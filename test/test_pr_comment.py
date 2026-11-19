@@ -772,6 +772,24 @@ class Format(unittest.TestCase):
         rows = self.m.collect(check, sarif=None, strict=True)
         self.assertTrue(all(r.blocking for r in rows))
 
+    def head(self, n_fix, n_warn, failing=True):
+        check = {"ok": not n_fix, "missing": {"de": [f"fix.k{i}" for i in range(n_fix)]},
+                 "extra": {"de": [f"old.k{i}" for i in range(n_warn)]}, "missing_files": [],
+                 "placeholder_issues": [], "faults": [], "warnings": []}
+        rows = self.m.collect(check, sarif=None, strict=False)
+        body = self.m.build_comment(rows, source="locales/en.json", langs=["de"], failing=failing)
+        return next(ln for ln in body.splitlines() if ln.startswith("### "))
+
+    def test_header_counts_fixes_and_warnings_apart(self):
+        # one system: "<n> to fix", then ", <n> warning(s)" only when there are any
+        cases = {(2, 1): "2 to fix, 1 warning", (1, 2): "1 to fix, 2 warnings",
+                 (1, 1): "1 to fix, 1 warning", (3, 0): "3 to fix", (1, 0): "1 to fix",
+                 (0, 1): "nothing to fix, 1 warning", (0, 3): "nothing to fix, 3 warnings",
+                 (0, 0): "no problems"}
+        for (n_fix, n_warn), want in cases.items():
+            with self.subTest(fix=n_fix, warn=n_warn):
+                self.assertEqual(self.head(n_fix, n_warn), f"### KAERIS i18n check: {want}")
+
 
 if __name__ == "__main__":
     unittest.main()
