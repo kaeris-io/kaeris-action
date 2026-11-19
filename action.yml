@@ -116,7 +116,10 @@ runs:
   using: composite
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      # v6 runs on Node 24. v5 targets Node 20, which GitHub deprecated: every job using this
+      # action got a "Node.js 20 is deprecated … actions/setup-python@v5" warning. A self-hosted
+      # runner needs v2.327.1 or later.
+      uses: actions/setup-python@v6
       with:
         python-version: "3.x"
 
