@@ -273,9 +273,11 @@ get the comment, or `comment: false` to silence the warning.
 
 ## Keep a CLI version
 
-The action sets up its own Python and installs the newest `kaeris` from PyPI on every run. To
-stay on one version, give pip a constraint before the action; the action's own `pip install`
-obeys it:
+The action sets up Python (`actions/setup-python`, `python-version: 3.x`) and runs
+`pip install "kaeris>=0.2.39"` in it. pip installs the newest `kaeris` from PyPI when that Python
+has none and leaves one that is already there as it is, so on a GitHub-hosted runner, which
+starts every job clean, each run gets the newest CLI. To stay on one version, give pip a
+constraint before the action; the action's own `pip install` obeys it:
 
 ```yaml
 - name: Keep the KAERIS CLI at 0.2.43
@@ -290,10 +292,12 @@ obeys it:
     languages: de,fr
 ```
 
-A `pip install "kaeris==0.2.43"` step before the action does not do it: that installs into
-another Python, and the action then installs the newest CLI into its own. `PIP_CONSTRAINT` holds
-for every later `pip install` in the job, and the file names only `kaeris`. The action asks for
-0.2.39 or later, so pin 0.2.39 or newer.
+A `pip install "kaeris==0.2.43"` step before the action holds only if it installs into the
+Python the action sets up. A plain pip step goes to the runner's own Python, and the action then
+installs the newest CLI into its own. On a self-hosted runner that keeps its Python between
+jobs, the `kaeris` an earlier job installed stays until something upgrades it; the constraint
+pins it there too. `PIP_CONSTRAINT` holds for every later `pip install` in the job, and the
+file names only `kaeris`. The action asks for 0.2.39 or later, so pin 0.2.39 or newer.
 
 ## Links
 
