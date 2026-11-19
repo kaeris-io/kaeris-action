@@ -76,5 +76,51 @@ class Footer(unittest.TestCase):
         self.assertNotIn(LINK, summary + output)
 
 
+
+def status_column(after, langs):
+    """{language: Status cell} of the matrix for one `kaeris check --json` body."""
+    with tempfile.TemporaryDirectory() as t:
+        after_path, out_file = os.path.join(t, "after.json"), os.path.join(t, "summary.md")
+        with open(after_path, "w", encoding="utf-8") as f:
+            json.dump(after, f)
+        subprocess.run([sys.executable, SCRIPT, "--mode", "check", "--langs", ",".join(langs),
+                        "--after", after_path, "--out-file", out_file],
+                       capture_output=True, text=True, encoding="utf-8", check=True)
+        with open(out_file, encoding="utf-8") as f:
+            rows = [l.split("|") for l in f.read().splitlines() if l.startswith("| ") and "---" not in l]
+    return {r[1].strip(): r[2].strip() for r in rows if r[1].strip() in langs}
+
+
+# The real body of `kaeris check --json` (B, 0.2.46) on pl one/other (an error, red in 0.2.43
+# too), de without `one` (a warning) and a lost placeholder in de: faults and warnings carry the
+# language. The placeholder fault repeats placeholder_issues and is counted once.
+PLURALS = {"ok": False, "missing": {}, "extra": {}, "missing_files": [],
+           "placeholder_issues": [{"lang": "de", "key": "a", "missing": ["{name}"], "added": []}],
+           "faults": [{"lang": "de", "key": "a", "msg": "lost placeholder {name}", "severity": "error"},
+                      {"lang": "pl", "key": "f", "severity": "error",
+                       "msg": "ICU plural is missing the few/many form(s) pl requires"}],
+           "warnings": [{"lang": "de", "key": "f", "severity": "warn",
+                         "msg": "ICU plural is missing the one form(s) de requires"}]}
+
+
+class StatusColumn(unittest.TestCase):
+    """A language is "complete" only when the check has nothing on it: critic 4 (19.11) saw
+    "✓ complete" beside pl, red only for its plural, under an ::error that sends people to this
+    matrix."""
+
+    def test_a_language_red_only_for_a_plural_is_not_complete(self):
+        self.assertEqual(status_column(PLURALS, ["pl"])["pl"], "⚠ 1 error")
+
+    def test_a_warning_is_named_and_not_complete(self):
+        after = {**PLURALS, "placeholder_issues": [], "faults": []}
+        self.assertEqual(status_column(after, ["de"])["de"], "⚠ 1 warning")
+
+    def test_the_placeholder_fault_is_counted_once(self):
+        self.assertEqual(status_column(PLURALS, ["de"])["de"], "⚠ 1 placeholder issue, 1 warning")
+
+    def test_a_clean_language_is_complete(self):
+        self.assertEqual(status_column(CLEAN, ["de"])["de"], "✓ complete")
+
+
 if __name__ == "__main__":
     unittest.main()

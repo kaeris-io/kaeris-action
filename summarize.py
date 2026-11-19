@@ -88,6 +88,17 @@ def main():
     for issue in after.get("placeholder_issues", []):
         ph_by_lang.setdefault(issue["lang"], []).append(issue)
     missing_files = set(after.get("missing_files", []))
+    # Findings beyond missing keys and placeholders (a plural form, a number, a tag…), by
+    # language: an error fails the check, a warning fails it only with `strict`. A placeholder
+    # fault repeats placeholder_issues and is counted there.
+    ph_keys = {(i["lang"], i.get("key")) for i in after.get("placeholder_issues", [])}
+    errors_by_lang, warnings_by_lang = {}, {}
+    for f in after.get("faults") or []:
+        if (f.get("lang"), f.get("key")) in ph_keys and "placeholder" in f.get("msg", ""):
+            continue
+        errors_by_lang[f.get("lang")] = errors_by_lang.get(f.get("lang"), 0) + 1
+    for w in after.get("warnings") or []:
+        warnings_by_lang[w.get("lang")] = warnings_by_lang.get(w.get("lang"), 0) + 1
     extra = after.get("extra", {})
 
     overflow = parse_overflow_count(args.log) if args.mode == "translate" else None
@@ -111,9 +122,10 @@ def main():
             total_translated += translated
             translated_cell = str(translated)
 
+        errs, warns = errors_by_lang.get(lang, 0), warnings_by_lang.get(lang, 0)
         if lang in missing_files:
             status = "⚠ locale file missing"
-        elif m_after == 0 and ph == 0:
+        elif m_after == 0 and ph == 0 and errs == 0 and warns == 0:
             status = "✓ complete"
         else:
             bits = []
@@ -121,6 +133,10 @@ def main():
                 bits.append(f"{m_after} missing")
             if ph:
                 bits.append(f"{ph} placeholder issue{'s' if ph != 1 else ''}")
+            if errs:
+                bits.append(f"{errs} error{'s' if errs != 1 else ''}")
+            if warns:
+                bits.append(f"{warns} warning{'s' if warns != 1 else ''}")
             status = "⚠ " + ", ".join(bits)
 
         rows.append((lang, status, m_after, ph, translated_cell))
