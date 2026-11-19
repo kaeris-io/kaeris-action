@@ -791,5 +791,20 @@ class Format(unittest.TestCase):
                 self.assertEqual(self.head(n_fix, n_warn), f"### KAERIS i18n check: {want}")
 
 
+class Readme(unittest.TestCase):
+    """The Inputs table in README lists exactly the inputs action.yml has (comment* included)."""
+
+    def test_inputs_table_matches_action_yml(self):
+        inputs, _ = parse_action()
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+            text = f.read()
+        section = text.split("\n## Inputs", 1)[1].split("\n## ", 1)[0]
+        listed = re.findall(r"^\| `([a-z-]+)` \|", section, re.M)
+        self.assertEqual(sorted(listed), sorted(inputs))
+        self.assertEqual(len(listed), len(set(listed)))
+        for name in ("comment", "comment-key", "comment-author", "github-token"):
+            self.assertIn(name, listed)
+
+
 if __name__ == "__main__":
     unittest.main()
