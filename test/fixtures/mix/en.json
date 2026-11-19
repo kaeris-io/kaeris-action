@@ -1,0 +1,8 @@
+{
+  "items_one": "{{count}} item",
+  "items_other": "{{count}} items",
+  "save": "Save",
+  "open": "Open",
+  "close": "Close",
+  "greeting": "Hello, {name}!"
+}

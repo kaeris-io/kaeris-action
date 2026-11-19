@@ -1,0 +1,8 @@
+{
+  "items_one": "{{count}} element",
+  "items_other": "{{count}} elementów",
+  "save": "Zapisz wszystkie zmiany w tym dokumencie teraz",
+  "open": "Otwórz ten dokument w nowym oknie przeglądarki",
+  "close": "Zamknij to okno i wróć do listy dokumentów",
+  "greeting": "Cześć, {nam}!"
+}

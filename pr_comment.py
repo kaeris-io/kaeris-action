@@ -135,17 +135,44 @@ def line_of_key(path, key):
     return pos
 
 
-def collect(check, sarif=None, strict=False):
-    """Rows, one per (language, key), most serious first. `kaeris check` reports a broken
-    placeholder twice (placeholder_issues and faults): it is said once here. A language with no
-    file is one row (the CLI also lists every source key as missing for it)."""
+_PLURAL = re.compile(r"^plural form missing: (\S+) (— .+)$")
+_KEYED = re.compile(r"^([^\s:]+): (.+)$")
+
+
+def split_key(msg):
+    """(key, problem) for a finding the CLI reports without a key. A plural set names the
+    missing form ("plural form missing: items_few — pl needs …"); the overflow check starts with
+    the key ("save: translation +42 characters …"). A file-level finding (register, consistency)
+    has no key: ("", msg)."""
+    m = _PLURAL.match(msg)
+    if m:
+        return m.group(1), "plural form missing " + m.group(2)
+    m = _KEYED.match(msg)
+    if m:
+        return m.group(1), m.group(2)
+    return "", msg
+
+
+def collect(check, sarif=None, strict=False, clean=False):
+    """Rows, one per (language, key, blocking or not), most serious first: an error and a
+    warning on one key are two rows, so the header counts each where it belongs. A finding
+    without a key gets the key from its message when it has one, else a row of its own.
+    `kaeris check` reports a broken placeholder twice (placeholder_issues and faults): it is said
+    once here. A language with no file is one row (the CLI also lists every source key as
+    missing for it). `clean`: the CLI exited 0, so nothing blocks and a key is one row again."""
     check = check or {}
     no_file = [lang for lang in check.get("missing_files") or []]
     rows = {}
 
     def add(lang, key, blocking, problem):
-        r = rows.setdefault((lang or "", key or ""), Row(lang or "", key or ""))
-        r.blocking = r.blocking or bool(blocking)
+        lang, key, blocking = lang or "", key or "", bool(blocking) and not clean
+        if not key:
+            key, problem = split_key(problem)
+        ident = (lang, key, blocking) if key else (lang, key, blocking, len(rows))
+        r = rows.get(ident)
+        if r is None:
+            r = rows[ident] = Row(lang, key)
+            r.blocking = blocking
         if problem not in r.problems:
             r.problems.append(problem)
         return r
@@ -158,7 +185,7 @@ def collect(check, sarif=None, strict=False):
     for f in check.get("faults") or []:
         add(f.get("lang"), f.get("key"), f.get("severity", "error") == "error" or strict, f.get("msg", ""))
     for issue in check.get("placeholder_issues") or []:
-        r = rows.get((issue.get("lang") or "", issue.get("key") or ""))
+        r = rows.get((issue.get("lang") or "", issue.get("key") or "", not clean))
         if r and any("placeholder" in p for p in r.problems):
             continue
         bits = []
@@ -175,14 +202,14 @@ def collect(check, sarif=None, strict=False):
             add(lang, key, strict, "not in the source (left over after a rename or delete?)")
 
     files = files_by_lang(sarif)
-    for (lang, key), r in rows.items():
-        r.file = files.get(lang)
-        if r.file and key and MISSING not in r.problems:
-            r.line = line_of_key(r.file, key)
+    for r in rows.values():
+        r.file = files.get(r.lang)
+        if r.file and r.key and MISSING not in r.problems:
+            r.line = line_of_key(r.file, r.key)
     first = []
     for lang in no_file:
         r = Row(lang, "")
-        r.blocking, r.expected = True, files.get(lang) or ""
+        r.blocking, r.expected = not clean, files.get(lang) or ""
         r.problems.append("no locale file")
         first.append(r)
     rest = list(rows.values())
@@ -198,7 +225,7 @@ _MD = re.compile(r"([\\`*_\[\]<>|~])")
 def esc(text, limit=200):
     """Plain text in a table cell: shown as typed, never rendered."""
     s = " ".join(str(text).split())
-    if len(s) > limit:
+    if limit and len(s) > limit:
         s = s[:limit - 1] + "…"
     s = s.replace("&", "&amp;")
     s = _MD.sub(r"\\\1", s)
@@ -235,6 +262,28 @@ def _blob(server, repo, sha, path, line):
     return url + (f"#L{line}" if line else "")
 
 
+CELL_CHARS = 300             # the Problem cell; whole problems, the rest counted, never cut silently
+
+
+def problem_cell(r, limit=CELL_CHARS):
+    """The problems of one row joined with "; ". What does not fit is named by count
+    ("… and 3 more"); only a single problem longer than the cell is cut, with "…"."""
+    probs = [" ".join(str(p).split()) for p in r.problems if p]
+    text = "" if r.blocking else "warning: "
+    shown = 0
+    for p in probs:
+        sep = "; " if shown else ""
+        if shown and len(text) + len(sep) + len(p) > limit:
+            break
+        if not shown and len(text) + len(p) > limit:
+            p = p[:max(limit - len(text) - 1, 20)] + "…"
+        text += sep + p
+        shown += 1
+    if shown < len(probs):
+        text += f" … and {len(probs) - shown} more"
+    return esc(text, None)
+
+
 def table(rows, limit, budget, link=None, measure=len):
     """(lines, shown): at most `limit` rows and `budget` (as `measure` counts it)."""
     out = ["| File | Key | Language | Problem |", "|---|---|---|---|"]
@@ -251,7 +300,7 @@ def table(rows, limit, budget, link=None, measure=len):
             else:
                 where = "–"
             key = code(r.key) if r.key else "–"
-            problem = esc(("" if r.blocking else "warning: ") + "; ".join(p for p in r.problems if p))
+            problem = problem_cell(r)
         line = f"| {where} | {key} | {esc(r.lang, 20)} | {problem} |"
         if size + measure(line) + 1 > budget:
             break
@@ -310,13 +359,31 @@ def build_comment(rows, source, langs, failing, head_sha=None, repo=None, server
         md.append(f"Full report: {summary_link}. Locally: `pip install kaeris`, then "
                   f"{code(local_command(source, langs, out_dir, strict), 400)}.")
     md.append("")
-    if cta:
-        md.append(f"<sub>Checked by [KAERIS]({SITE_URL}) (free, no API key). "
-                  "Updated on every push; `comment: false` turns it off.</sub>")
-    else:
-        md.append("<sub>Updated on every push; `comment: false` turns it off.</sub>")
+    md.append(_footer(cta))
     body = "\n".join(md) + "\n"
     return body[:GITHUB_LIMIT - 1]
+
+
+def _footer(cta):
+    if cta:
+        return (f"<sub>Checked by [KAERIS]({SITE_URL}) (free, no API key). "
+                "Updated on every push; `comment: false` turns it off.</sub>")
+    return "<sub>Updated on every push; `comment: false` turns it off.</sub>"
+
+
+def build_unfinished(exit_code, source, langs, head_sha=None, run_url=None, cid=None, cta=True):
+    """The comment when `kaeris check` stopped before comparing (exit 2: bad usage or an
+    unreadable file; or a crash): nothing about the translations, so no table and no count."""
+    code_txt = exit_code or "?"
+    where = f" at `{head_sha[:7]}`" if head_sha else ""
+    log = f"[job log]({run_url})" if run_url else "job log"
+    md = [marker(cid or comment_id(source, None, langs)),
+          f"### KAERIS i18n check: did not finish (exit {code_txt})", "",
+          f"`kaeris check` stopped before it compared {esc(', '.join(langs))} with {code(source)}{where} "
+          f"(exit {code_txt}: bad usage, an unreadable file or a crash). What it found earlier is not "
+          f"listed until it runs to the end. The reason is in the {log}.",
+          "", _footer(cta)]
+    return "\n".join(md) + "\n"
 
 
 def build_summary(rows, link=None):
@@ -421,7 +488,10 @@ def post_comment(args, rows, env):
     number = pr.get("number")
     if not number:
         return
-    if rows is None:
+    # Exit 2 (bad usage, an unreadable file) or a crash says nothing about the translations: an
+    # existing comment is turned into "did not finish", never left saying "N to fix" from before.
+    unfinished = args.check_exit not in ("0", "1")
+    if rows is None and not unfinished:
         print(f"{TITLE}: `kaeris check` gave no result; the comment is left as it is.")
         return
     failing = args.check_exit not in ("", "0")
@@ -458,6 +528,9 @@ def post_comment(args, rows, env):
     if not mine and not failing:
         print(f"{TITLE}: nothing to fix, no comment posted.")
         return
+    if not mine and unfinished:
+        print(f"{TITLE}: `kaeris check` did not finish (exit {args.check_exit or '?'}); no comment to update.")
+        return
 
     server = env.get("GITHUB_SERVER_URL") or "https://github.com"
     run_id = env.get("GITHUB_RUN_ID")
@@ -468,10 +541,14 @@ def post_comment(args, rows, env):
     # Same rule as action.yml's bash: only the exact string "false" turns the link off.
     cta = env.get("KA_CTA", "true") != "false" and \
         env.get("KAERIS_NO_CTA", "").strip().lower() in ("", "0", "false", "no")
-    body = build_comment(rows, args.source, args.langs_list, failing,
-                         head_sha=(pr.get("head") or {}).get("sha") or env.get("GITHUB_SHA"),
-                         repo=repo, server=server, run_url=run_url, out_dir=args.out or None,
-                         strict=args.strict == "true", cid=cid, cta=cta)
+    head_sha = (pr.get("head") or {}).get("sha") or env.get("GITHUB_SHA")
+    if unfinished:
+        body = build_unfinished(args.check_exit, args.source, args.langs_list, head_sha, run_url,
+                                cid=cid, cta=cta)
+    else:
+        body = build_comment(rows, args.source, args.langs_list, failing,
+                             head_sha=head_sha, repo=repo, server=server, run_url=run_url,
+                             out_dir=args.out or None, strict=args.strict == "true", cid=cid, cta=cta)
 
     data, done = None, None
     if mine:
@@ -479,6 +556,9 @@ def post_comment(args, rows, env):
         done = "updated"
         if status == 404:                                 # deleted under us: post it again
             mine = []
+            if unfinished:                                # …unless there is nothing to say
+                print(f"{TITLE}: the comment was deleted and the check did not finish; nothing posted.")
+                return
     if not mine:
         status, data = api.request("POST", f"/repos/{repo}/issues/{number}/comments", {"body": body})
         done = "posted"
@@ -534,10 +614,9 @@ def main(argv=None, env=None):
     try:
         check = load_json(args.check_json)
         # Same test as action.yml's bash: only the exact string "true" passes --strict.
-        rows = collect(check, load_json(args.sarif), args.strict == "true") if check is not None else None
-        if rows is not None and args.check_exit == "0":
-            for r in rows:                                # the CLI said nothing blocks: nothing does
-                r.blocking = False
+        # Exit 0: the CLI said nothing blocks, so nothing does (one row per key again).
+        rows = collect(check, load_json(args.sarif), args.strict == "true",
+                       clean=args.check_exit == "0") if check is not None else None
         if rows and args.summary_file:
             pr = (load_json(env.get("GITHUB_EVENT_PATH")) or {}).get("pull_request") or {}
             sha = (pr.get("head") or {}).get("sha") or env.get("GITHUB_SHA")
