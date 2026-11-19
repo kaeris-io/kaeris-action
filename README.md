@@ -101,7 +101,7 @@ jobs:
 | `only-new` | `translate`: only translate keys missing/changed since the last run (uses `kaeris.lock`) | `true` |
 | `tone` | `translate`: `neutral`, `formal`, or `casual` | — (`neutral`) |
 | `icu` | `translate`: hint that strings use ICU MessageFormat (plurals/select) so it's preserved | `false` |
-| `strict` | `check`: also fail on extra/stale keys not in the source | `false` |
+| `strict` | `check`: also fail on warnings and on extra/stale keys not in the source | `false` |
 | `sarif-file` | `check`: also write a SARIF 2.1.0 report to this path (see below) | — |
 | `comment` | `check` on `pull_request`: keep one PR comment with the findings, edited on every push (see below). `false` turns it off | `true` |
 | `comment-key` | `check`: which comment this check keeps; set it to tell apart two checks over the same files | from `source`, `out`, `languages` |
@@ -138,14 +138,21 @@ Checked de against `locales/en.json` at `3f2a9c1`.
 
 The check fails until the problems above are fixed.
 Full report: job summary. Locally: `pip install kaeris`, then `kaeris check --source "locales/en.json" --langs de`.
+
+<sub>Checked by KAERIS (free, no API key). Updated on every push; `comment: false` turns it off.</sub>
 ```
 
+(The file cells are links in the real comment; the hidden marker line above the header is left out here.)
+
 Each file cell links to the line at the PR's head commit. The header counts what blocks the
-merge and what is only a warning apart, for example `2 to fix, 1 warning`. How it behaves:
+merge and what is only a warning apart, one row per key and kind: for example
+`2 to fix, 1 warning`. How it behaves:
 
 - **Posted only when the check fails.** A clean PR gets no comment at all.
-- **Edited, never repeated.** The next push edits the same comment; when the problems are
-  fixed it reads "no problems", so the reviewer sees they are gone.
+- **Edited, never repeated.** The next push edits the same comment: "no problems" once
+  everything is fixed, "nothing to fix, 2 warnings" when only warnings are left, so the
+  reviewer sees what is gone. If `kaeris check` does not finish (exit 2: bad usage, an
+  unreadable file) the comment says "did not finish" instead of keeping the old list.
 - **Needs `pull-requests: write`.** Add it under `permissions:` (workflow or job). Without it
   there is no comment, a failing run gets one warning, and the result does not change: the
   findings alone make the job red or green. The token is passed to the comment step only,

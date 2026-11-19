@@ -48,14 +48,15 @@ inputs:
     default: ""
 
   strict:
-    description: "check mode: also fail if a target locale has extra/stale keys not in the source."
+    description: "check mode: also fail on warnings and if a target locale has extra/stale keys not in the source."
     required: false
     default: "false"
   comment:
     description: >-
       check mode, on pull_request: keep one PR comment with the findings (file, key, language,
-      problem), edited on every push. Posted only when the check fails; a later clean run edits
-      it to "no problems". Needs `permissions: pull-requests: write`; without it (and on a PR
+      problem), edited on every push. Posted only when the check fails; a later run edits it to
+      what is left ("no problems", or "nothing to fix, 2 warnings"), or to "did not finish" when
+      `kaeris check` exits 2. Needs `permissions: pull-requests: write`; without it (and on a PR
       from a fork) there is no comment, a failing run gets one warning, the findings are in the
       job summary and the result is unchanged. Its last line links kaeris.dev unless
       `cta: false`. "false" turns the comment off.
