@@ -56,7 +56,7 @@ inputs:
       check mode, on pull_request: keep one PR comment with the findings (file, key, language,
       problem), edited on every push. Posted only when the check fails; a later run edits it to
       what is left ("no problems", or "nothing to fix, 2 warnings"), or to "did not finish" when
-      `kaeris check` exits 2. Needs `permissions: pull-requests: write`; without it (and on a PR
+      `kaeris check` exits 2 or crashes without a result. Needs `permissions: pull-requests: write`; without it (and on a PR
       from a fork) there is no comment, a failing run gets one warning, the findings are in the
       job summary and the result is unchanged. Its last line links kaeris.dev unless
       `cta: false`. "false" turns the comment off.
@@ -306,10 +306,15 @@ runs:
       shell: bash
       env:
         KA_CHECK_EXIT: ${{ steps.run.outputs.check-exit-code }}
+        KA_CHECK_JSON: ${{ steps.run.outputs.check-json }}
       run: |
         # 1 is the CLI's "found something"; anything else (2 bad usage, a crash) is not about
-        # the translations and must not be reported as if it were.
-        if [ "$KA_CHECK_EXIT" = "1" ]; then
+        # the translations and must not be reported as if it were. A crash is exit 1 too, but
+        # with nothing on stdout: no result, so not "found".
+        if [ "$KA_CHECK_EXIT" = "1" ] && [ ! -s "$KA_CHECK_JSON" ]; then
+          echo "::error::kaeris check failed (exit 1) without a result, see the log above"
+          exit 1
+        elif [ "$KA_CHECK_EXIT" = "1" ]; then
           echo "::error::kaeris check found incomplete/broken translations — see the job summary for the language matrix"
           exit 1
         elif [ "$KA_CHECK_EXIT" != "0" ]; then

@@ -201,7 +201,8 @@ merge and what is only a warning apart, one row per key and kind: for example
 - **Edited, never repeated.** The next push edits the same comment: "no problems" once
   everything is fixed, "nothing to fix, 2 warnings" when only warnings are left, so the
   reviewer sees what is gone. If `kaeris check` does not finish (exit 2: bad usage, an
-  unreadable file) the comment says "did not finish" instead of keeping the old list.
+  unreadable file; or a crash with no result) the comment says "did not finish" instead of
+  keeping the old list.
 - **Needs `pull-requests: write`.** Add it under `permissions:` (workflow or job). Without it
   there is no comment, a failing run gets one warning, and the result does not change: the
   findings alone make the job red or green. The token is passed to the comment step only,

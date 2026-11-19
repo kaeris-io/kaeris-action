@@ -286,6 +286,7 @@ for a in "$@"; do
   prev="$a"
 done
 cat "$FAKE_CHECK_JSON"
+[ -n "$FAKE_STDERR" ] && echo "$FAKE_STDERR" >&2
 exit "${FAKE_EXIT:-0}"
 """
 
@@ -297,7 +298,9 @@ class Run:
 
 
 def run_action(gh, fixture="broken", event="pull_request", inputs=None, fork=False, token=TOKEN,
-               exit_code=None, api_url=None):
+               exit_code=None, api_url=None, check_json=None):
+    """`check_json`: what the stub prints instead of the recorded result ("" prints nothing and
+    copies no SARIF, like a CLI that crashed before its JSON)."""
     bash = find_bash()
     defaults, steps = parse_action()
     folder, langs, recorded_exit = FIXTURES[fixture]
@@ -334,9 +337,18 @@ def run_action(gh, fixture="broken", event="pull_request", inputs=None, fork=Fal
             "RUNNER_TEMP": tmp,
             "FAKE_CHECK_JSON": _posix(os.path.join(FIX, f"{fixture}.json")),
             "FAKE_SARIF": _posix(os.path.join(FIX, f"{fixture}.sarif")),
+            "FAKE_STDERR": "",
             "FAKE_EXIT": str(recorded_exit if exit_code is None else exit_code),
             "FAKE_ARGS": f"{tmp}/kaeris_args", "FAKE_ENV": f"{tmp}/kaeris_env",
         })
+        if check_json is not None:
+            path = os.path.join(t, "given_check.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(check_json)
+            base["FAKE_CHECK_JSON"] = _posix(path)
+            if not check_json:
+                base["FAKE_SARIF"] = ""
+                base["FAKE_STDERR"] = "Traceback (most recent call last):\nRuntimeError: boom"
         outputs, failed, code, log = {}, False, 0, []
         for n, step in enumerate(steps):
             if step["run"] is None or step.get("name") == "Install KAERIS CLI":
@@ -631,6 +643,47 @@ class PRComment(unittest.TestCase):
         self.assertEqual(r.code, 2, r.out)
         self.assertEqual(self.gh.calls("POST") + self.gh.calls("PATCH"), [])
 
+    # Pre-tag round 3, N3: a crash is exit 1 too (Python's own), with nothing on stdout. The old
+    # "N to fix" must not stay, and an empty result must not read as "no problems" on a red job.
+    def test_crash_without_json_turns_the_comment_into_not_finished(self):
+        run_action(self.gh, "broken")
+        r = run_action(self.gh, "broken", exit_code=1, check_json="")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertEqual(len(self.gh.calls("POST")), 1, r.out)
+        self.assertEqual(len(self.gh.calls("PATCH")), 1, r.out)
+        body = self.marked()[0]["body"]
+        self.assertIn("### KAERIS i18n check: did not finish (exit 1)", body)
+        self.assertIn(f"https://github.com/{REPO}/actions/runs/4242", body)
+        self.assertNotIn("to fix", body)
+        self.assertNotIn("no problems", body)
+        self.assertNotIn("greeting", body)
+
+    def test_exit_1_with_an_empty_result_is_not_no_problems(self):
+        empty = json.dumps({"ok": False, "missing": {}, "extra": {}, "missing_files": [],
+                            "placeholder_issues": [], "faults": [], "warnings": []})
+        run_action(self.gh, "broken")
+        r = run_action(self.gh, "broken", exit_code=1, check_json=empty)
+        self.assertEqual(r.code, 1, r.out)
+        body = self.marked()[0]["body"]
+        self.assertIn("did not finish (exit 1)", body)
+        self.assertNotIn("no problems", body)
+        self.assertNotIn("Nothing left to fix", body)
+
+    def test_exit_1_with_an_empty_result_and_no_comment_posts_nothing(self):
+        empty = json.dumps({"ok": False, "missing": {}, "extra": {}, "missing_files": [],
+                            "placeholder_issues": [], "faults": [], "warnings": []})
+        for given in ("", empty):
+            with self.subTest(json=bool(given)):
+                r = run_action(self.gh, "broken", exit_code=1, check_json=given)
+                self.assertEqual(r.code, 1, r.out)
+                self.assertEqual(self.gh.calls("POST") + self.gh.calls("PATCH"), [])
+
+    def test_gate_does_not_call_a_crash_broken_translations(self):
+        r = run_action(self.gh, "broken", exit_code=1, check_json="")
+        self.assertEqual(r.code, 1, r.out)
+        self.assertIn("kaeris check failed (exit 1) without a result", r.out)
+        self.assertNotIn("found incomplete/broken translations", r.out)
+
     # Pre-tag round 2: real CLI 0.2.46 output, keyless findings each on their own row
     def test_real_mix_rows_link_their_lines(self):
         r = run_action(self.gh, "mix")
@@ -769,7 +822,8 @@ class Format(unittest.TestCase):
         self.assertNotIn("@admin", row)
         self.assertNotIn("#12", row)
         self.assertNotIn("**now**", row)
-        self.assertNotIn("`c", row)
+        # the key keeps its backtick: a longer fence, so it cannot close the code span
+        self.assertIn("| ``a\\|b`c`` |", row)
 
     def test_no_invisible_characters_in_the_source(self):
         with open(os.path.join(ROOT, "pr_comment.py"), encoding="utf-8") as f:
@@ -850,6 +904,59 @@ class Format(unittest.TestCase):
         self.assertGreaterEqual(shown, 1)
         self.assertLess(shown, 8)
         self.assertIn(f"and {8 - shown} more", row)
+
+    # Pre-tag round 3, N4: a key is kept whole, whatever it holds
+    def keyless(self, msg, severity="warn"):
+        rec = {"lang": "de", "msg": msg, "severity": severity}
+        check = {"ok": severity != "error", "missing": {}, "extra": {}, "missing_files": [],
+                 "placeholder_issues": [], "faults": [rec] if severity == "error" else [],
+                 "warnings": [] if severity == "error" else [rec]}
+        return self.m.collect(check, sarif=None, strict=False)
+
+    def test_overflow_key_with_colon_space_is_kept_whole(self):
+        cases = {
+            "Error: try again": "translation +42 characters vs source — may overflow UI",
+            "Save changes": "translation +15% vs source (typical +35%) — may overflow UI",
+            "a: b: c": "translation +3 characters vs source — may overflow UI",
+            "ratio: translation +1": "translation +20 characters vs source — may overflow UI",
+            "menu.file: open": "translation +12% vs source (typical +35%) — may overflow UI",
+        }
+        for key, problem in cases.items():
+            with self.subTest(key=key):
+                rows = self.keyless(f"{key}: {problem}")
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0].key, key)
+                self.assertEqual(rows[0].problems, [problem])
+
+    def test_plural_key_with_a_space_is_kept_whole(self):
+        msg = "plural form missing: Save file_few — pl needs the one/few/many/other forms of 'Save file'"
+        rows = self.keyless(msg, "error")
+        self.assertEqual(rows[0].key, "Save file_few")
+        self.assertEqual(rows[0].problems,
+                         ["plural form missing — pl needs the one/few/many/other forms of 'Save file'"])
+
+    def test_file_level_findings_get_no_key(self):
+        # Fluent parse notes, register and consistency findings name no key of the file.
+        for msg in ("line 3: welcome: unclosed placeable",
+                    "inconsistent translation of \"Cart\" across 3 keys: Warenkorb, Korb",
+                    "file mixes informal and formal address (2 informal vs 3 formal markers) — pick one register",
+                    "Plural-Forms declares nplurals=2, but pl needs 3 plural forms — the extra forms can never be selected",
+                    "note: this is not an overflow finding"):
+            with self.subTest(msg=msg):
+                rows = self.keyless(msg)
+                self.assertEqual(rows[0].key, "")
+                self.assertEqual(rows[0].problems, [msg])
+
+    def test_key_with_pipe_star_backtick_shows_as_typed(self):
+        for key, cell in (("a|b*c`d", "``a\\|b*c`d``"), ("`x`", "`` `x` ``"),
+                          ("**bold**", "`**bold**`"), ("x``y", "`x``y`")):
+            with self.subTest(key=key):
+                check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [],
+                         "placeholder_issues": [], "warnings": [],
+                         "faults": [{"lang": "de", "key": key, "severity": "error", "msg": "lost inline tag <b>"}]}
+                row = self.table_rows(self.body(check))[0]
+                self.assertIn(f"| {cell} |", row)
+                self.assertEqual(len(re.split(r"(?<!\\)\|", row)), 6, row)   # 4 cells
 
     def test_exit_zero_merges_rows_back_to_one_per_key(self):
         check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [], "placeholder_issues": [],

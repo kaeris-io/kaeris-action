@@ -135,15 +135,20 @@ def line_of_key(path, key):
     return pos
 
 
-_PLURAL = re.compile(r"^plural form missing: (\S+) (— .+)$")
-_KEYED = re.compile(r"^([^\s:]+): (.+)$")
+# The two keyless findings of `kaeris check` (0.2.39 to 0.2.46) that name a key, matched by their
+# own wording, not by "something: something": a key may hold ": ", spaces or dots ("Error: try
+# again" is a key in a .strings or .po file), and a Fluent note ("line 3: welcome: …") names none.
+# The key part is greedy: the problem text has no ": translation +", so the last one is the real
+# boundary. The plural key is lazy: the text after it repeats the base inside quotes.
+_PLURAL = re.compile(r"^plural form missing: (.+?) (— [\w-]+ needs the [\w/]+ forms of '.*')$", re.S)
+_KEYED = re.compile(r"^(.+): (translation \+\d+(?:\.\d+)?(?: characters|%) vs source\b.*)$", re.S)
 
 
 def split_key(msg):
     """(key, problem) for a finding the CLI reports without a key. A plural set names the
     missing form ("plural form missing: items_few — pl needs …"); the overflow check starts with
-    the key ("save: translation +42 characters …"). A file-level finding (register, consistency)
-    has no key: ("", msg)."""
+    the key ("save: translation +42 characters …", "Save as: translation +15% vs source …").
+    Anything else (register, consistency, a Fluent or .po note) has no key: ("", msg)."""
     m = _PLURAL.match(msg)
     if m:
         return m.group(1), "plural form missing " + m.group(2)
@@ -234,11 +239,16 @@ def esc(text, limit=200):
 
 
 def code(text, limit=120):
-    """A value in a code span: backticks cannot close it, a pipe cannot split the table."""
-    s = " ".join(str(text).split()).replace("`", "'")
+    """A value in a code span, shown as typed: the fence is a run of backticks the value does not
+    hold, so a backtick in a key cannot close it; a pipe cannot split the table (`\\|`, which a
+    GitHub table reads as `|`, inside code too)."""
+    s = " ".join(str(text).split())
     if len(s) > limit:
         s = s[:limit - 1] + "…"
-    return "`" + s.replace("|", "\\|") + "`"
+    runs = {len(r) for r in re.findall(r"`+", s)}
+    fence = "`" * next(n for n in range(1, len(runs) + 2) if n not in runs)
+    pad = " " if s.startswith("`") or s.endswith("`") else ""
+    return fence + pad + s.replace("|", "\\|") + pad + fence
 
 
 def comment_id(source, out, langs, key=""):
@@ -373,14 +383,16 @@ def _footer(cta):
 
 def build_unfinished(exit_code, source, langs, head_sha=None, run_url=None, cid=None, cta=True):
     """The comment when `kaeris check` stopped before comparing (exit 2: bad usage or an
-    unreadable file; or a crash): nothing about the translations, so no table and no count."""
+    unreadable file; or a crash, exit 1 with no findings in its result): nothing about the
+    translations, so no table and no count."""
     code_txt = exit_code or "?"
+    why = "bad usage or an unreadable file" if code_txt == "2" else "it gave no result, most likely a crash"
     where = f" at `{head_sha[:7]}`" if head_sha else ""
     log = f"[job log]({run_url})" if run_url else "job log"
     md = [marker(cid or comment_id(source, None, langs)),
           f"### KAERIS i18n check: did not finish (exit {code_txt})", "",
           f"`kaeris check` stopped before it compared {esc(', '.join(langs))} with {code(source)}{where} "
-          f"(exit {code_txt}: bad usage, an unreadable file or a crash). What it found earlier is not "
+          f"(exit {code_txt}: {why}). What it found earlier is not "
           f"listed until it runs to the end. The reason is in the {log}.",
           "", _footer(cta)]
     return "\n".join(md) + "\n"
@@ -490,7 +502,9 @@ def post_comment(args, rows, env):
         return
     # Exit 2 (bad usage, an unreadable file) or a crash says nothing about the translations: an
     # existing comment is turned into "did not finish", never left saying "N to fix" from before.
-    unfinished = args.check_exit not in ("0", "1")
+    # A crash is exit 1 too (Python's own), with no JSON: exit 1 is "found something" only when
+    # the result lists something; otherwise a red job would read "no problems".
+    unfinished = args.check_exit not in ("0", "1") or (args.check_exit == "1" and not rows)
     if rows is None and not unfinished:
         print(f"{TITLE}: `kaeris check` gave no result; the comment is left as it is.")
         return
