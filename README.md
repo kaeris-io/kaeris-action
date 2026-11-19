@@ -52,7 +52,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: kaeris-io/kaeris-action@v2
         with:
           mode: check
@@ -77,7 +77,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: kaeris
         uses: kaeris-io/kaeris-action@v2
         with:
