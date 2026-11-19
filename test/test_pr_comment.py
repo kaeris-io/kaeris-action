@@ -7,7 +7,7 @@ does (`bash --noprofile --norc -eo pipefail`, one GITHUB_OUTPUT per step, `if:` 
 action.yml itself. Two things are replaced, nothing else:
 
   * `kaeris` is a stub that prints a recorded `kaeris check --json` result (test/fixtures/check,
-    recorded from CLI 0.2.39 on test/fixtures/*) and copies the recorded SARIF;
+    recorded from CLI 0.2.39 on test/fixtures/*; `mix` from CLI 0.2.46) and copies the recorded SARIF;
   * the GitHub REST API is a local http.server on 127.0.0.1 that keeps the PR's comments.
 
 Python runs with PYTHONUTF8=0: a Windows runner has no UTF-8 mode, and a test that sets it hides
@@ -36,7 +36,9 @@ HEAD_SHA = "0123456789abcdef0123456789abcdef01234567"
 BOT = ("github-actions[bot]", "Bot")
 FIXTURES = {   # name: (source folder, languages, exit code the CLI gave when it was recorded)
     "broken": ("broken", "de", 1), "good": ("good", "de,fr", 0), "nofile": ("good", "de,ja", 1),
-    "stale": ("stale", "de", 0), "umlaut": ("ümlaut", "de", 1)}
+    "stale": ("stale", "de", 0), "umlaut": ("ümlaut", "de", 1),
+    # CLI 0.2.46: pl with only one/other plural forms, three long translations, {name} -> {nam}
+    "mix": ("mix", "pl", 1)}
 
 
 def _posix(path):
@@ -611,6 +613,34 @@ class PRComment(unittest.TestCase):
         self.assertIn("kaeris check failed (exit 2)", r.out)
         self.assertNotIn("found incomplete/broken translations", r.out)
 
+    # Pre-tag round 2: exit 2 says nothing about the translations; the old "N to fix" must not stay
+    def test_exit_2_turns_the_existing_comment_into_not_finished(self):
+        run_action(self.gh, "broken")
+        r = run_action(self.gh, "broken", exit_code=2)
+        self.assertEqual(r.code, 2, r.out)
+        self.assertEqual(len(self.gh.calls("POST")), 1, r.out)
+        self.assertEqual(len(self.gh.calls("PATCH")), 1, r.out)
+        body = self.marked()[0]["body"]
+        self.assertIn("### KAERIS i18n check: did not finish (exit 2)", body)
+        self.assertIn(f"https://github.com/{REPO}/actions/runs/4242", body)
+        self.assertNotIn("to fix", body)
+        self.assertNotIn("greeting", body)
+
+    def test_exit_2_without_a_comment_posts_nothing(self):
+        r = run_action(self.gh, "broken", exit_code=2)
+        self.assertEqual(r.code, 2, r.out)
+        self.assertEqual(self.gh.calls("POST") + self.gh.calls("PATCH"), [])
+
+    # Pre-tag round 2: real CLI 0.2.46 output, keyless findings each on their own row
+    def test_real_mix_rows_link_their_lines(self):
+        r = run_action(self.gh, "mix")
+        self.assertEqual(r.code, 1, r.out)
+        body = self.marked()[0]["body"]
+        self.assertIn("### KAERIS i18n check: 3 to fix, 3 warnings", body)
+        save = next(ln for ln in body.splitlines() if "`save`" in ln)
+        self.assertIn("test/fixtures/mix/pl.json#L4", save)
+        self.assertIn("warning: translation +42 characters", save)
+
     # Round 3, 5: a refused DELETE is said, not swallowed
     def test_r3_refused_delete_of_a_duplicate_warns(self):
         self.gh.race = True
@@ -771,6 +801,63 @@ class Format(unittest.TestCase):
         self.assertFalse(any(r.blocking for r in rows))
         rows = self.m.collect(check, sarif=None, strict=True)
         self.assertTrue(all(r.blocking for r in rows))
+
+    def table_rows(self, body):
+        return [ln for ln in body.splitlines() if ln.startswith("| ") and not ln.startswith("| File")]
+
+    def test_real_cli_0_2_46_output_keeps_fixes_and_warnings_apart(self):
+        # Found by the pre-tag critic: 0 keyed errors + 3 file-level warnings were merged into the
+        # keyless plural row, the header said "2 to fix" and the cell was cut with no word of it.
+        with open(os.path.join(FIX, "mix.json"), encoding="utf-8") as f:
+            check = json.load(f)
+        body = self.body(check)
+        self.assertIn("### KAERIS i18n check: 3 to fix, 3 warnings", body)
+        rows = self.table_rows(body)
+        self.assertEqual(len(rows), 6, body)
+        plural = [r for r in rows if "plural form missing" in r]
+        self.assertEqual(len(plural), 2, body)
+        self.assertIn("`items_few`", plural[0])
+        self.assertIn("`items_many`", plural[1])
+        for r in plural:
+            self.assertNotIn("overflow", r)
+            self.assertNotIn("warning:", r)
+        for key, chars in (("save", 42), ("open", 42), ("close", 37)):
+            row = next(r for r in rows if f"`{key}`" in r)
+            self.assertIn(f"warning: translation +{chars} characters vs source — may overflow UI", row)
+        greeting = next(r for r in rows if "`greeting`" in r)
+        self.assertIn("lost placeholder {name}; invented placeholder {nam}", greeting)
+        self.assertLess(rows.index(greeting), rows.index(next(r for r in rows if "`save`" in r)))
+        self.assertNotIn("…", body)
+
+    def test_one_key_with_an_error_and_a_warning_is_two_rows(self):
+        check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [], "placeholder_issues": [],
+                 "faults": [{"lang": "de", "key": "title", "severity": "error", "msg": "lost inline tag <b>"}],
+                 "warnings": [{"lang": "de", "key": "title", "severity": "warn", "msg": "text left in English"}]}
+        body = self.body(check)
+        self.assertIn("### KAERIS i18n check: 1 to fix, 1 warning", body)
+        rows = self.table_rows(body)
+        self.assertEqual(len(rows), 2, body)
+        self.assertNotIn("English", rows[0])
+        self.assertIn("warning: text left in English", rows[1])
+
+    def test_a_long_cell_says_how_many_problems_it_leaves_out(self):
+        faults = [{"lang": "de", "key": "k", "severity": "error", "msg": f"problem number {i} " + "x" * 60}
+                  for i in range(8)]
+        check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [], "placeholder_issues": [],
+                 "faults": faults, "warnings": []}
+        row = self.table_rows(self.body(check))[0]
+        shown = len(re.findall(r"problem number \d", row))
+        self.assertGreaterEqual(shown, 1)
+        self.assertLess(shown, 8)
+        self.assertIn(f"and {8 - shown} more", row)
+
+    def test_exit_zero_merges_rows_back_to_one_per_key(self):
+        check = {"ok": False, "missing": {}, "extra": {}, "missing_files": [], "placeholder_issues": [],
+                 "faults": [{"lang": "de", "key": "title", "severity": "error", "msg": "lost inline tag <b>"}],
+                 "warnings": [{"lang": "de", "key": "title", "severity": "warn", "msg": "text left in English"}]}
+        rows = self.m.collect(check, sarif=None, strict=False, clean=True)
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows[0].blocking)
 
     def head(self, n_fix, n_warn, failing=True):
         check = {"ok": not n_fix, "missing": {"de": [f"fix.k{i}" for i in range(n_fix)]},

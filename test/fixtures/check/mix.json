@@ -1,0 +1,61 @@
+{
+  "ok": false,
+  "missing": {},
+  "extra": {},
+  "placeholder_issues": [
+    {
+      "lang": "pl",
+      "key": "greeting",
+      "missing": [
+        "{name}"
+      ],
+      "added": [
+        "{nam}"
+      ]
+    }
+  ],
+  "missing_files": [],
+  "faults": [
+    {
+      "lang": "pl",
+      "key": "",
+      "msg": "plural form missing: items_few — pl needs the one/few/many/other forms of 'items'",
+      "severity": "error"
+    },
+    {
+      "lang": "pl",
+      "key": "",
+      "msg": "plural form missing: items_many — pl needs the one/few/many/other forms of 'items'",
+      "severity": "error"
+    },
+    {
+      "lang": "pl",
+      "key": "greeting",
+      "msg": "lost placeholder {name}",
+      "severity": "error"
+    },
+    {
+      "lang": "pl",
+      "key": "greeting",
+      "msg": "invented placeholder {nam} (not in source)",
+      "severity": "error"
+    }
+  ],
+  "warnings": [
+    {
+      "lang": "pl",
+      "msg": "save: translation +42 characters vs source — may overflow UI",
+      "severity": "warn"
+    },
+    {
+      "lang": "pl",
+      "msg": "open: translation +42 characters vs source — may overflow UI",
+      "severity": "warn"
+    },
+    {
+      "lang": "pl",
+      "msg": "close: translation +37 characters vs source — may overflow UI",
+      "severity": "warn"
+    }
+  ]
+}
