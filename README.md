@@ -127,7 +127,7 @@ jobs:
 In `check` mode on a `pull_request` event the action keeps **one** comment on the pull request:
 
 ```markdown
-### KAERIS i18n check: 2 problems to fix
+### KAERIS i18n check: 2 to fix
 
 Checked de against `locales/en.json` at `3f2a9c1`.
 
@@ -140,7 +140,8 @@ The check fails until the problems above are fixed.
 Full report: job summary. Locally: `pip install kaeris`, then `kaeris check --source "locales/en.json" --langs de`.
 ```
 
-Each file cell links to the line at the PR's head commit. How it behaves:
+Each file cell links to the line at the PR's head commit. The header counts what blocks the
+merge and what is only a warning apart, for example `2 to fix, 1 warning`. How it behaves:
 
 - **Posted only when the check fails.** A clean PR gets no comment at all.
 - **Edited, never repeated.** The next push edits the same comment; when the problems are

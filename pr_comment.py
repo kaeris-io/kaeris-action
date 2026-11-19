@@ -278,12 +278,13 @@ def build_comment(rows, source, langs, failing, head_sha=None, repo=None, server
                   out_dir=None, strict=False, cid=None, cta=True):
     n_fix = sum(r.blocking for r in rows) if failing else 0
     n_review = len(rows) - n_fix
-    if n_fix:
-        head = f"### KAERIS i18n check: {n_fix} problem{'s' if n_fix != 1 else ''} to fix"
-    elif n_review:
-        head = f"### KAERIS i18n check: no problems to fix, {n_review} to review"
+    if n_fix or n_review:
+        head = f"{n_fix} to fix" if n_fix else "nothing to fix"
+        if n_review:
+            head += f", {n_review} warning{'s' if n_review != 1 else ''}"
     else:
-        head = "### KAERIS i18n check: no problems"
+        head = "no problems"
+    head = "### KAERIS i18n check: " + head
     checked = f"Checked {esc(', '.join(langs))} against {code(source)}"
     if head_sha:
         checked += f" at `{head_sha[:7]}`"
