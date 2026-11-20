@@ -77,17 +77,26 @@ class Footer(unittest.TestCase):
 
 
 
-def status_column(after, langs):
-    """{language: Status cell} of the matrix for one `kaeris check --json` body."""
+def summary_md(after, langs, check_exit=None, raw=None):
+    """The summary for one `kaeris check --json` body (`raw`: the file's text as is, for a CLI
+    that printed something else), with `--check-exit` as action.yml passes it."""
     with tempfile.TemporaryDirectory() as t:
         after_path, out_file = os.path.join(t, "after.json"), os.path.join(t, "summary.md")
         with open(after_path, "w", encoding="utf-8") as f:
-            json.dump(after, f)
-        subprocess.run([sys.executable, SCRIPT, "--mode", "check", "--langs", ",".join(langs),
-                        "--after", after_path, "--out-file", out_file],
-                       capture_output=True, text=True, encoding="utf-8", check=True)
+            f.write(raw if raw is not None else json.dumps(after))
+        cmd = [sys.executable, SCRIPT, "--mode", "check", "--langs", ",".join(langs),
+               "--after", after_path, "--out-file", out_file]
+        if check_exit is not None:
+            cmd += ["--check-exit", check_exit]
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
         with open(out_file, encoding="utf-8") as f:
-            rows = [l.split("|") for l in f.read().splitlines() if l.startswith("| ") and "---" not in l]
+            return f.read()
+
+
+def status_column(after, langs, check_exit=None):
+    """{language: Status cell} of the matrix for one `kaeris check --json` body."""
+    md = summary_md(after, langs, check_exit)
+    rows = [l.split("|") for l in md.splitlines() if l.startswith("| ") and "---" not in l]
     return {r[1].strip(): r[2].strip() for r in rows if r[1].strip() in langs}
 
 
@@ -120,6 +129,34 @@ class StatusColumn(unittest.TestCase):
 
     def test_a_clean_language_is_complete(self):
         self.assertEqual(status_column(CLEAN, ["de"])["de"], "✓ complete")
+
+
+# The real body of `kaeris check --json` (0.2.43 and B, 0.2.46) for `languages: pt_BR`, file
+# pt_BR.json, one key missing and a lost placeholder, exit 1: the CLI writes the language as
+# pt-BR in every field (critic 5, fx-summ/ptBR_us_missing).
+PT_BR = {"ok": False, "missing": {"pt-BR": ["b"]}, "extra": {}, "missing_files": [],
+         "placeholder_issues": [{"lang": "pt-BR", "key": "a", "missing": ["{name}"], "added": []}],
+         "faults": [{"lang": "pt-BR", "key": "a", "msg": "lost placeholder {name}", "severity": "error"}],
+         "warnings": []}
+
+
+class LanguageCodes(unittest.TestCase):
+    """The CLI reads `pt_BR`, `PT-br` and `pt-BR` as one language and writes it pt-BR (language
+    lower, script Title, region UPPER, `_` read as `-`). The matrix looked the language up as
+    the user wrote it and found nothing: "| pt_BR | ✓ complete | 0 | 0 |" beside exit 1."""
+
+    def test_an_underscore_code_finds_its_findings(self):
+        md = summary_md(PT_BR, ["pt_BR"])
+        self.assertIn("| pt_BR | ⚠ 1 missing, 1 placeholder issue | 1 | 1 | – |", md)
+        self.assertIn("Placeholder-loss: **1**", md)
+
+    def test_case_is_read_as_the_cli_reads_it(self):
+        after = {**PT_BR, "missing": {"zh-Hant": ["b"]}, "placeholder_issues": [], "faults": []}
+        self.assertEqual(status_column(after, ["zh_hant"])["zh_hant"], "⚠ 1 missing")
+
+    def test_one_language_written_twice_is_one_row(self):
+        md = summary_md(PT_BR, ["pt_BR", "pt-BR"])
+        self.assertEqual(md.count("| pt_BR |") + md.count("| pt-BR |"), 1)
 
 
 if __name__ == "__main__":

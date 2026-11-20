@@ -28,6 +28,23 @@ def load_json(path):
         return None
 
 
+# How the CLI spells a language (kaeris/cli.py `_canon_lang`, the same in 0.2.43 and 0.2.46):
+# `--langs pt_BR` is pt-BR in every field of its JSON, `zh_hant` is zh-Hant. The matrix shows
+# the code as the user wrote it and looks it up the way the CLI wrote it.
+_LANG_TAG_RE = re.compile(r"[A-Za-z]{2,3}(?:[-_](?:[A-Za-z]{2}|[A-Za-z]{4}|\d{3}))*")
+
+
+def canon_lang(tag):
+    """'pt_BR' → 'pt-BR', 'zh_hant' → 'zh-Hant': language lower, script Title, region UPPER,
+    either separator. Not shaped like a language tag: as written."""
+    tag = str(tag if tag is not None else "").strip()
+    if not _LANG_TAG_RE.fullmatch(tag):
+        return tag
+    first, *rest = re.split(r"[-_]", tag)
+    return "-".join([first.lower()] + [p.upper() if len(p) == 2 else p.title() if len(p) == 4
+                                       else p for p in rest])
+
+
 def parse_overflow_count(log_path):
     """Best-effort: `kaeris translate` (whole-file mode only, i.e. --only-new not set)
     prints a line like '! 3 translation(s) may overflow your UI ...' to stderr with
@@ -71,7 +88,12 @@ def main():
     ap.add_argument("--github-output", default=None)
     args = ap.parse_args()
 
-    langs = [l.strip() for l in args.langs.split(",") if l.strip()]
+    # One row per language as the CLI counts them (`pt_BR,pt-BR` is one), spelled as written.
+    langs, seen = [], set()
+    for l in args.langs.split(","):
+        if l.strip() and canon_lang(l) not in seen:
+            seen.add(canon_lang(l))
+            langs.append(l.strip())
     after = load_json(args.after)
     before = load_json(args.before)
 
@@ -82,24 +104,32 @@ def main():
         write(args, "\n".join(md), missing=None, ph=None)
         return
 
-    missing_after = after.get("missing", {})
-    missing_before = (before or {}).get("missing", {}) if before else None
-    ph_by_lang = {}
-    for issue in after.get("placeholder_issues", []):
-        ph_by_lang.setdefault(issue["lang"], []).append(issue)
-    missing_files = set(after.get("missing_files", []))
+    def by_lang(mapping):
+        out = {}
+        for lang, keys in (mapping or {}).items():
+            out.setdefault(canon_lang(lang), []).extend(keys or [])
+        return out
+
+    def count(items):
+        out = {}
+        for i in items:
+            out[canon_lang(i.get("lang"))] = out.get(canon_lang(i.get("lang")), 0) + 1
+        return out
+
+    missing_after = by_lang(after.get("missing"))
+    missing_before = by_lang(before.get("missing")) if before and isinstance(before, dict) else None
+    extra = by_lang(after.get("extra"))
+    placeholder_issues = after.get("placeholder_issues") or []
+    ph_by_lang = count(placeholder_issues)
+    missing_files = {canon_lang(l) for l in after.get("missing_files") or []}
     # Findings beyond missing keys and placeholders (a plural form, a number, a tag…), by
     # language: an error fails the check, a warning fails it only with `strict`. A placeholder
     # fault repeats placeholder_issues and is counted there.
-    ph_keys = {(i["lang"], i.get("key")) for i in after.get("placeholder_issues", [])}
-    errors_by_lang, warnings_by_lang = {}, {}
-    for f in after.get("faults") or []:
-        if (f.get("lang"), f.get("key")) in ph_keys and "placeholder" in f.get("msg", ""):
-            continue
-        errors_by_lang[f.get("lang")] = errors_by_lang.get(f.get("lang"), 0) + 1
-    for w in after.get("warnings") or []:
-        warnings_by_lang[w.get("lang")] = warnings_by_lang.get(w.get("lang"), 0) + 1
-    extra = after.get("extra", {})
+    ph_keys = {(canon_lang(i.get("lang")), i.get("key")) for i in placeholder_issues}
+    faults = [f for f in after.get("faults") or []
+              if not ((canon_lang(f.get("lang")), f.get("key")) in ph_keys
+                      and "placeholder" in (f.get("msg") or ""))]
+    errors_by_lang, warnings_by_lang = count(faults), count(after.get("warnings") or [])
 
     overflow = parse_overflow_count(args.log) if args.mode == "translate" else None
 
@@ -110,20 +140,21 @@ def main():
 
     rows = []
     for lang in langs:
-        m_after = len(missing_after.get(lang, []))
-        ph = len(ph_by_lang.get(lang, []))
+        c = canon_lang(lang)
+        m_after = len(missing_after.get(c, []))
+        ph = ph_by_lang.get(c, 0)
         total_missing += m_after
         total_ph += ph
 
         translated_cell = "–"
         if have_before:
-            m_before = len(missing_before.get(lang, []))
+            m_before = len(missing_before.get(c, []))
             translated = max(m_before - m_after, 0)
             total_translated += translated
             translated_cell = str(translated)
 
-        errs, warns = errors_by_lang.get(lang, 0), warnings_by_lang.get(lang, 0)
-        if lang in missing_files:
+        errs, warns = errors_by_lang.get(c, 0), warnings_by_lang.get(c, 0)
+        if c in missing_files:
             status = "⚠ locale file missing"
         elif m_after == 0 and ph == 0 and errs == 0 and warns == 0:
             status = "✓ complete"
