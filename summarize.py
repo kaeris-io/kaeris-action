@@ -45,16 +45,31 @@ def canon_lang(tag):
                                        else p for p in rest])
 
 
-def unfinished(exit_code):
+def run_url(env=None):
+    """This run's page, built as pr_comment.py builds it; None outside a GitHub run."""
+    env = os.environ if env is None else env
+    server = env.get("GITHUB_SERVER_URL") or "https://github.com"
+    repo, run_id = env.get("GITHUB_REPOSITORY"), env.get("GITHUB_RUN_ID")
+    if not (repo and run_id):
+        return None
+    attempt = env.get("GITHUB_RUN_ATTEMPT") or "1"
+    return f"{server}/{repo}/actions/runs/{run_id}" + (f"/attempts/{attempt}" if attempt != "1" else "")
+
+
+def unfinished(exit_code, env=None):
     """The summary when `kaeris check` stopped before comparing, in the PR comment's words
-    (pr_comment.build_unfinished): nothing about the translations, so no matrix."""
+    (pr_comment.build_unfinished): nothing about the translations, so no matrix. The same text
+    is the `summary` output, which a workflow may put in a PR body: no step log is "above" it,
+    so it names the job log and links the run."""
+    url = run_url(env)
+    log = f"[job log]({url})" if url else "job log"
     if exit_code in ("", "0"):
         what = "`kaeris check` did not produce a result"
     else:
         why = "bad usage or an unreadable file" if exit_code == "2" else \
             "it gave no result, most likely a crash"
         what = f"`kaeris check` did not finish (exit {exit_code}: {why})"
-    return "\n".join(["## KAERIS i18n\n", what + ". The reason is in the step log above.\n"])
+    return "\n".join(["## KAERIS i18n\n", what + f". The reason is in the {log} (the KAERIS step).\n"])
 
 
 def parse_overflow_count(log_path):

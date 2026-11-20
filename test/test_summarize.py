@@ -25,19 +25,22 @@ BROKEN = {"ok": False, "missing": {"de": ["b"]}, "extra": {}, "missing_files": [
           "placeholder_issues": [{"lang": "de", "key": "a", "missing": ["{n}"], "added": []}]}
 
 
-def run(mode="check", after=CLEAN, env=None):
-    """(stdout, summary file, the `summary` output) of one summarize.py run."""
+def run(mode="check", after=CLEAN, env=None, check_exit=None):
+    """(stdout, summary file, the `summary` output) of one summarize.py run. The GITHUB_*
+    variables are only the ones `env` gives (a CI runner has its own)."""
     with tempfile.TemporaryDirectory() as t:
         after_path = os.path.join(t, "after.json")
         if after is not None:
             with open(after_path, "w", encoding="utf-8") as f:
                 json.dump(after, f)
         out_file, gh_out = os.path.join(t, "summary.md"), os.path.join(t, "gh_output")
-        e = {k: v for k, v in os.environ.items() if k != "KAERIS_NO_CTA"}
+        e = {k: v for k, v in os.environ.items()
+             if k != "KAERIS_NO_CTA" and not k.startswith("GITHUB_")}
         e.update(env or {})
         p = subprocess.run([sys.executable, SCRIPT, "--mode", mode, "--langs", "de",
                             "--after", after_path, "--out-file", out_file,
-                            "--github-output", gh_out],
+                            "--github-output", gh_out]
+                           + (["--check-exit", check_exit] if check_exit is not None else []),
                            capture_output=True, text=True, encoding="utf-8", env=e, check=True)
         with open(out_file, encoding="utf-8") as f:
             summary = f.read()
@@ -228,6 +231,29 @@ class FailedCheck(unittest.TestCase):
     def test_an_exit_above_1_did_not_finish_whatever_the_json(self):
         md = summary_md(CLEAN, ["de"], "3")
         self.assertIn("did not finish (exit 3: it gave no result, most likely a crash)", md)
+
+    # The same text is the `summary` output, which a translate workflow puts in the PR body:
+    # there is no step log "above" it (critic 6, minor 9). It names the job log and links the
+    # run, as the PR comment does.
+    RUN = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r",
+           "GITHUB_RUN_ID": "4242", "GITHUB_RUN_ATTEMPT": "1"}
+
+    def test_did_not_finish_links_the_job_log_not_a_log_above(self):
+        _, summary, output = run("translate", after=None, env=self.RUN, check_exit="3")
+        line = "The reason is in the [job log](https://github.com/o/r/actions/runs/4242) (the KAERIS step)."
+        self.assertIn(line, summary)
+        self.assertIn(line, output)
+        self.assertNotIn("above", summary + output)
+
+    def test_a_rerun_links_its_attempt(self):
+        _, summary, _ = run("translate", after=None, env={**self.RUN, "GITHUB_RUN_ATTEMPT": "2"},
+                            check_exit="2")
+        self.assertIn("(https://github.com/o/r/actions/runs/4242/attempts/2)", summary)
+
+    def test_no_run_id_names_the_job_log_without_a_link(self):
+        _, summary, _ = run("translate", after=None, check_exit="1")
+        self.assertIn("The reason is in the job log (the KAERIS step).", summary)
+        self.assertNotIn("above", summary)
 
     def test_another_language_can_still_be_complete(self):
         after = {**PLURALS, "placeholder_issues": [], "warnings": [], "faults": PLURALS["faults"][1:]}
