@@ -8,7 +8,7 @@ guessing zero.
 Usage:
   summarize.py --mode translate|check --langs es,fr,de \
       --after AFTER.json [--before BEFORE.json] [--log translate.log] \
-      --out-file summary.md [--github-output "$GITHUB_OUTPUT"]
+      [--check-exit N] --out-file summary.md [--github-output "$GITHUB_OUTPUT"]
 """
 import argparse
 import json
@@ -43,6 +43,18 @@ def canon_lang(tag):
     first, *rest = re.split(r"[-_]", tag)
     return "-".join([first.lower()] + [p.upper() if len(p) == 2 else p.title() if len(p) == 4
                                        else p for p in rest])
+
+
+def unfinished(exit_code):
+    """The summary when `kaeris check` stopped before comparing, in the PR comment's words
+    (pr_comment.build_unfinished): nothing about the translations, so no matrix."""
+    if exit_code in ("", "0"):
+        what = "`kaeris check` did not produce a result"
+    else:
+        why = "bad usage or an unreadable file" if exit_code == "2" else \
+            "it gave no result, most likely a crash"
+        what = f"`kaeris check` did not finish (exit {exit_code}: {why})"
+    return "\n".join(["## KAERIS i18n\n", what + ". The reason is in the step log above.\n"])
 
 
 def parse_overflow_count(log_path):
@@ -86,7 +98,10 @@ def main():
     ap.add_argument("--log", default=None)
     ap.add_argument("--out-file", required=True)
     ap.add_argument("--github-output", default=None)
+    # The exit code of the `kaeris check` that wrote --after; empty when not known.
+    ap.add_argument("--check-exit", default="")
     args = ap.parse_args()
+    check_exit = (args.check_exit or "").strip()
 
     # One row per language as the CLI counts them (`pt_BR,pt-BR` is one), spelled as written.
     langs, seen = [], set()
@@ -96,12 +111,13 @@ def main():
             langs.append(l.strip())
     after = load_json(args.after)
     before = load_json(args.before)
+    if not isinstance(before, dict):
+        before = None
 
-    if after is None:
-        # `kaeris check` itself failed to run (bad usage, exit 2) — no data to summarize.
-        md = ["## KAERIS i18n\n", "`kaeris check` did not produce a result "
-              "(bad usage — check source/langs/out) — see the step log above.\n"]
-        write(args, "\n".join(md), missing=None, ph=None)
+    # No result, or an exit that is not the CLI's 0/1 (2 is bad usage, anything else a crash):
+    # nothing to put in a matrix. The PR comment calls both "did not finish".
+    if not isinstance(after, dict) or check_exit not in ("", "0", "1"):
+        write(args, unfinished(check_exit), missing=None, ph=None)
         return
 
     def by_lang(mapping):
@@ -117,7 +133,7 @@ def main():
         return out
 
     missing_after = by_lang(after.get("missing"))
-    missing_before = by_lang(before.get("missing")) if before and isinstance(before, dict) else None
+    missing_before = by_lang(before.get("missing")) if before else None
     extra = by_lang(after.get("extra"))
     placeholder_issues = after.get("placeholder_issues") or []
     ph_by_lang = count(placeholder_issues)
@@ -129,7 +145,29 @@ def main():
     faults = [f for f in after.get("faults") or []
               if not ((canon_lang(f.get("lang")), f.get("key")) in ph_keys
                       and "placeholder" in (f.get("msg") or ""))]
-    errors_by_lang, warnings_by_lang = count(faults), count(after.get("warnings") or [])
+    warnings = after.get("warnings") or []
+    errors_by_lang, warnings_by_lang = count(faults), count(warnings)
+
+    # A finding the matrix cannot put on a row (no language, or one not asked for) may be about
+    # any of them: then no row says "complete".
+    asked = {canon_lang(l) for l in langs}
+    stray = (sum(n for lang, n in ph_by_lang.items() if lang not in asked)
+             + sum(n for lang, n in errors_by_lang.items() if lang not in asked)
+             + sum(n for lang, n in warnings_by_lang.items() if lang not in asked)
+             + sum(len(v) for lang, v in missing_after.items() if lang not in asked)
+             + sum(len(v) for lang, v in extra.items() if lang not in asked)
+             + len(missing_files - asked))
+
+    def nothing_on(lang):
+        c = canon_lang(lang)
+        return c not in missing_files and not missing_after.get(c) and not ph_by_lang.get(c) \
+            and not errors_by_lang.get(c) and not warnings_by_lang.get(c) and not extra.get(c)
+
+    # Exit 1 is "found something". A result that places nothing on any language did not find
+    # it: as the PR comment, "did not finish" (a `{}`, a crash after printing a clean body).
+    if check_exit == "1" and not stray and all(nothing_on(l) for l in langs):
+        write(args, unfinished(check_exit), missing=None, ph=None)
+        return
 
     overflow = parse_overflow_count(args.log) if args.mode == "translate" else None
 
@@ -158,8 +196,8 @@ def main():
         stale = len(extra.get(c, []))
         if c in missing_files:
             status = "⚠ locale file missing"
-        elif m_after == 0 and ph == 0 and errs == 0 and warns == 0 and stale == 0:
-            status = "✓ complete"
+        elif nothing_on(lang):
+            status = "⚠ not confirmed" if stray else "✓ complete"
         else:
             bits = []
             if m_after:
@@ -202,6 +240,10 @@ def main():
         n_extra = sum(len(v) for v in extra.values())
         lines.append(f"_{n_extra} extra/stale key(s) found in target locale(s) not in the source "
                      "(warning only unless `--strict`)._")
+    if stray:
+        lines.append("")
+        lines.append(f"_{stray} finding(s) in the result name no language listed here, so no "
+                     "language is marked complete._")
 
     lines.append("")
     lines.append("_Generated from `kaeris check --json`" +

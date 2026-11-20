@@ -241,6 +241,7 @@ runs:
           --after "$after_json" \
           --before "$before_json" \
           --log "$translate_log" \
+          --check-exit "$check_exit" \
           --out-file "$summary_file" \
           --github-output "$GITHUB_OUTPUT"
 

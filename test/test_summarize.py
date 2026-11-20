@@ -166,5 +166,74 @@ class LanguageCodes(unittest.TestCase):
         self.assertEqual(md.count("| pt_BR |") + md.count("| pt-BR |"), 1)
 
 
+class FailedCheck(unittest.TestCase):
+    """No language is "✓ complete" beside a red check (critic 5, minor 3), and when the check
+    did not finish the summary says what the PR comment says (pr_comment.build_unfinished).
+    `--check-exit` is the exit code action.yml passes."""
+
+    def test_a_clean_language_with_exit_0_is_complete(self):
+        self.assertEqual(status_column(CLEAN, ["de"], "0")["de"], "✓ complete")
+
+    def test_an_extra_key_under_strict_is_the_failure(self):
+        after = {**CLEAN, "extra": {"de": ["zz"]}}
+        self.assertEqual(status_column(after, ["de"], "1")["de"], "⚠ 1 extra key")
+
+    def test_a_warning_without_strict_with_exit_0_is_not_complete(self):
+        after = {**PLURALS, "placeholder_issues": [], "faults": []}
+        self.assertEqual(status_column(after, ["de"], "0")["de"], "⚠ 1 warning")
+
+    def test_pt_BR_with_exit_1(self):
+        self.assertEqual(status_column(PT_BR, ["pt_BR"], "1")["pt_BR"],
+                         "⚠ 1 missing, 1 placeholder issue")
+
+    def test_garbage_instead_of_json_did_not_finish(self):
+        md = summary_md(None, ["de"], "1", raw="Traceback (most recent call last):\n  boom\n")
+        self.assertIn("`kaeris check` did not finish (exit 1: it gave no result, most likely a crash)", md)
+        self.assertNotIn("bad usage", md)
+        self.assertNotIn("complete", md)
+
+    def test_exit_2_did_not_finish_with_bad_usage(self):
+        md = summary_md(None, ["de"], "2", raw="")
+        self.assertIn("`kaeris check` did not finish (exit 2: bad usage or an unreadable file)", md)
+
+    def test_check_that_never_ran_claims_nothing(self):
+        md = summary_md(None, ["de"], raw="")
+        self.assertIn("`kaeris check` did not produce a result", md)
+        self.assertNotIn("complete", md)
+        self.assertNotIn("bad usage", md)
+
+    def test_empty_result_with_exit_1_did_not_finish(self):
+        # `{}` lists nothing, so it cannot be why the check failed: the PR comment calls this
+        # "did not finish" too (exit 1 and no findings).
+        md = summary_md({}, ["de"], "1")
+        self.assertIn("did not finish (exit 1: it gave no result, most likely a crash)", md)
+        self.assertNotIn("complete", md)
+
+    def test_empty_result_with_exit_0_is_complete(self):
+        # Exit 0 is the CLI saying nothing is wrong, and `{}` names nothing either.
+        self.assertEqual(status_column({}, ["de"], "0")["de"], "✓ complete")
+
+    def test_a_finding_without_a_language_marks_no_language_complete(self):
+        after = {"ok": False, "faults": [{"lang": None, "key": None, "msg": "x", "severity": "error"}]}
+        md = summary_md(after, ["de"], "1")
+        self.assertEqual(status_column(after, ["de"], "1")["de"], "⚠ not confirmed")
+        self.assertIn("1 finding(s) in the result name no language listed here", md)
+
+    def test_exit_1_with_nothing_on_any_language_did_not_finish(self):
+        # A red check whose result places nothing on the languages asked for.
+        md = summary_md(CLEAN, ["de"], "1")
+        self.assertIn("did not finish (exit 1", md)
+        self.assertNotIn("complete", md)
+
+    def test_an_exit_above_1_did_not_finish_whatever_the_json(self):
+        md = summary_md(CLEAN, ["de"], "3")
+        self.assertIn("did not finish (exit 3: it gave no result, most likely a crash)", md)
+
+    def test_another_language_can_still_be_complete(self):
+        after = {**PLURALS, "placeholder_issues": [], "warnings": [], "faults": PLURALS["faults"][1:]}
+        cols = status_column(after, ["pl", "de"], "1")
+        self.assertEqual(cols, {"pl": "⚠ 1 error", "de": "✓ complete"})
+
+
 if __name__ == "__main__":
     unittest.main()
