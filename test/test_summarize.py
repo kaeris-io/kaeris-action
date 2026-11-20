@@ -130,6 +130,13 @@ class StatusColumn(unittest.TestCase):
     def test_a_clean_language_is_complete(self):
         self.assertEqual(status_column(CLEAN, ["de"])["de"], "✓ complete")
 
+    def test_an_extra_key_is_named(self):
+        # Real body under `strict: true` for a de with every key and one the source no longer
+        # has, exit 1 (critic 5, fx-summ/de_extra_key_only): "ok" stays true and the extra key
+        # is the whole failure. Without `strict` it is reported as a warning is.
+        after = {**CLEAN, "extra": {"de": ["zz"]}}
+        self.assertEqual(status_column(after, ["de"])["de"], "⚠ 1 extra key")
+
 
 # The real body of `kaeris check --json` (0.2.43 and B, 0.2.46) for `languages: pt_BR`, file
 # pt_BR.json, one key missing and a lost placeholder, exit 1: the CLI writes the language as

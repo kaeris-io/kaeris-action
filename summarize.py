@@ -154,9 +154,11 @@ def main():
             translated_cell = str(translated)
 
         errs, warns = errors_by_lang.get(c, 0), warnings_by_lang.get(c, 0)
+        # A key the source no longer has: what fails a `strict` check, a warning otherwise.
+        stale = len(extra.get(c, []))
         if c in missing_files:
             status = "⚠ locale file missing"
-        elif m_after == 0 and ph == 0 and errs == 0 and warns == 0:
+        elif m_after == 0 and ph == 0 and errs == 0 and warns == 0 and stale == 0:
             status = "✓ complete"
         else:
             bits = []
@@ -168,6 +170,8 @@ def main():
                 bits.append(f"{errs} error{'s' if errs != 1 else ''}")
             if warns:
                 bits.append(f"{warns} warning{'s' if warns != 1 else ''}")
+            if stale:
+                bits.append(f"{stale} extra key{'s' if stale != 1 else ''}")
             status = "⚠ " + ", ".join(bits)
 
         rows.append((lang, status, m_after, ph, translated_cell))
